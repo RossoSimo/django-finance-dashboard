@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}News - FinanceDash{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h3 class="mb-0">News{% if active_ticker %} — {{ active_ticker }}{% endif %}</h3>
+</div>
+
+<div class="mb-3">
+    <a href="{% url 'newsfeed:home' %}" class="btn btn-sm {% if not active_ticker %}btn-primary{% else %}btn-outline-secondary{% endif %}">All</a>
+    {% for t in tickers %}
+        <a href="{% url 'newsfeed:home' %}?ticker={{ t }}" class="btn btn-sm {% if t == active_ticker %}btn-primary{% else %}btn-outline-secondary{% endif %}">{{ t }}</a>
+    {% endfor %}
+</div>
+
+<div class="card p-3">
+    {% if items %}
+        <ul class="list-unstyled mb-0">
+        {% for item in items %}
+            <li class="mb-3 pb-3 border-bottom">
+                <a href="{{ item.link }}" target="_blank" rel="noopener">{{ item.title }}</a>
+                <div class="small text-muted">
+                    {% if item.ticker %}{{ item.ticker }} · {% endif %}
+                    {{ item.publisher|default:"Unknown source" }}
+                    {% if item.published %} · {{ item.published }}{% endif %}
+                </div>
+            </li>
+        {% endfor %}
+        </ul>
+    {% else %}
+        <p class="text-muted mb-0">No news found. Add holdings or watchlist tickers to see relevant news here.</p>
+    {% endif %}
+</div>
+{% endblock %}

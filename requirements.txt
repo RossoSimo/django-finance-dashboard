@@ -1,0 +1,4 @@
+Django>=5.2.8,<6.0
+yfinance>=0.2.40
+python-dotenv>=1.2.2
+python-dotenv

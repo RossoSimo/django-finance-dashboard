@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Watchlist - FinanceDash{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h3 class="mb-0">Watchlist</h3>
+    <a href="{% url 'watchlist:add' %}" class="btn btn-sm btn-primary">+ Add ticker</a>
+</div>
+
+<div class="card p-3">
+    {% if rows %}
+    <table class="table table-sm mb-0">
+        <thead>
+            <tr>
+                <th>Ticker</th><th>Type</th><th>Price</th><th>Change</th>
+                <th>Target</th><th>Notes</th><th></th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for row in rows %}
+            <tr class="{% if row.hit_target %}table-success{% endif %}">
+                <td><strong>{{ row.item.ticker }}</strong> {% if row.quote.name %}<div class="small text-muted">{{ row.quote.name }}</div>{% endif %}</td>
+                <td>{{ row.item.get_asset_type_display }}</td>
+                <td>{% if row.quote.price %}{{ row.quote.price|floatformat:2 }} {{ row.quote.currency }}{% else %}—{% endif %}</td>
+                <td>
+                    {% if row.quote.change_pct is not None %}
+                        <span class="badge-change {% if row.quote.change_pct > 0 %}badge-up{% elif row.quote.change_pct < 0 %}badge-down{% else %}badge-flat{% endif %}">
+                            {% if row.quote.change_pct > 0 %}▲{% elif row.quote.change_pct < 0 %}▼{% endif %}
+                            {{ row.quote.change_pct|floatformat:2 }}%
+                        </span>
+                    {% else %}—{% endif %}
+                </td>
+                <td>{{ row.item.target_price|default:"—" }}{% if row.hit_target %} 🎯{% endif %}</td>
+                <td class="small">{{ row.item.notes }}</td>
+                <td>
+                    <a href="{% url 'newsfeed:home' %}?ticker={{ row.item.ticker }}" class="btn btn-sm btn-outline-secondary">News</a>
+                    <form method="post" action="{% url 'watchlist:remove' row.item.pk %}" class="d-inline">
+                        {% csrf_token %}
+                        <button class="btn btn-sm btn-outline-danger" type="submit" onclick="return confirm('Remove {{ row.item.ticker }}?')">×</button>
+                    </form>
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+        <p class="text-muted mb-0">No watchlist items yet.</p>
+    {% endif %}
+</div>
+{% endblock %}

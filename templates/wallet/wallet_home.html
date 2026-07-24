@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %}Wallet - FinanceDash{% endblock %}
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h3 class="mb-0">Wallet &amp; Liquidity</h3>
+    <div>
+        <a href="{% url 'wallet:add_cash_account' %}" class="btn btn-sm btn-outline-secondary">+ Cash account</a>
+        <a href="{% url 'wallet:add_holding' %}" class="btn btn-sm btn-outline-secondary">+ Holding</a>
+        <a href="{% url 'wallet:add_transaction' %}" class="btn btn-sm btn-primary">+ Transaction</a>
+    </div>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <div class="card p-3">
+            <div class="text-muted small">Total cash</div>
+            <div class="fs-4 fw-bold">${{ summary.cash_total|floatformat:2 }}</div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card p-3">
+            <div class="text-muted small">Holdings value</div>
+            <div class="fs-4 fw-bold">${{ summary.holdings_value|floatformat:2 }}</div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card p-3">
+            <div class="text-muted small">Net worth</div>
+            <div class="fs-4 fw-bold">${{ summary.net_worth|floatformat:2 }}</div>
+        </div>
+    </div>
+</div>
+
+<div class="card p-3 mb-4">
+    <h5>Cash accounts</h5>
+    {% if cash_accounts %}
+    <table class="table table-sm">
+        <thead><tr><th>Name</th><th>Currency</th><th>Balance</th></tr></thead>
+        <tbody>
+        {% for acc in cash_accounts %}
+            <tr><td>{{ acc.name }}</td><td>{{ acc.currency }}</td><td>{{ acc.balance|floatformat:2 }}</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+        <p class="text-muted mb-0">No cash accounts yet.</p>
+    {% endif %}
+</div>
+
+<div class="card p-3 mb-4">
+    <h5>Holdings</h5>
+    {% if summary.rows %}
+    <table class="table table-sm">
+        <thead>
+            <tr>
+                <th>Ticker</th><th>Type</th><th>Qty</th><th>Avg cost</th>
+                <th>Price</th><th>Market value</th><th>Gain/Loss</th><th></th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for row in summary.rows %}
+            <tr>
+                <td><strong>{{ row.holding.ticker }}</strong></td>
+                <td>{{ row.holding.get_asset_type_display }}</td>
+                <td>{{ row.holding.quantity }}</td>
+                <td>{{ row.holding.avg_cost|floatformat:2 }}</td>
+                <td>{% if row.quote.price %}{{ row.quote.price|floatformat:2 }}{% else %}—{% endif %}</td>
+                <td>{{ row.market_value|floatformat:2 }}</td>
+                <td class="{% if row.gain > 0 %}positive{% elif row.gain < 0 %}negative{% endif %}">
+                    {{ row.gain|floatformat:2 }}{% if row.gain_pct is not None %} ({{ row.gain_pct|floatformat:1 }}%){% endif %}
+                </td>
+                <td>
+                    <form method="post" action="{% url 'wallet:delete_holding' row.holding.pk %}" class="d-inline">
+                        {% csrf_token %}
+                        <button class="btn btn-sm btn-outline-danger" type="submit" onclick="return confirm('Remove {{ row.holding.ticker }}?')">×</button>
+                    </form>
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+        <p class="text-muted mb-0">No holdings yet.</p>
+    {% endif %}
+</div>
+
+<div class="d-flex justify-content-between align-items-center mb-2">
+    <h5 class="mb-0">Recent transactions</h5>
+    <a href="{% url 'wallet:transaction_list' %}" class="small">View all &rarr;</a>
+</div>
+<div class="card p-3">
+    {% if recent_tx %}
+    <table class="table table-sm mb-0">
+        <thead><tr><th>Date</th><th>Type</th><th>Target</th><th>Qty</th><th>Price</th><th>Amount</th></tr></thead>
+        <tbody>
+        {% for tx in recent_tx %}
+            <tr>
+                <td>{{ tx.date }}</td>
+                <td>{{ tx.get_tx_type_display }}</td>
+                <td>{{ tx.holding.ticker|default:tx.cash_account.name|default:"—" }}</td>
+                <td>{{ tx.quantity|default:"—" }}</td>
+                <td>{{ tx.price|default:"—" }}</td>
+                <td>{{ tx.amount|default:"—" }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+        <p class="text-muted mb-0">No transactions yet.</p>
+    {% endif %}
+</div>
+
+{% endblock %}

@@ -1,0 +1,215 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - FinanceDash{% endblock %}
+
+{% block content %}
+
+<div class="mb-4">
+    <h2 class="fw-bold mb-1">Good to see you 👋</h2>
+    <p class="text-muted">Here's where things stand today.</p>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <div class="card stat-card p-3 h-100" style="--accent:#22c55e;">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <div class="text-muted small">Liquidity (cash)</div>
+                    <div class="fs-3 fw-bold">${{ summary.cash_total|floatformat:2 }}</div>
+                </div>
+                <div class="stat-icon">💵</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card stat-card p-3 h-100" style="--accent:#4f8ef7;">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <div class="text-muted small">Holdings value</div>
+                    <div class="fs-3 fw-bold">${{ summary.holdings_value|floatformat:2 }}</div>
+                </div>
+                <div class="stat-icon">📈</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card stat-card p-3 h-100" style="--accent:#8b5cf6;">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <div class="text-muted small">Net worth</div>
+                    <div class="fs-3 fw-bold">${{ summary.net_worth|floatformat:2 }}</div>
+                </div>
+                <div class="stat-icon">🏦</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4 mb-4">
+    <div class="col-lg-8">
+        <div class="card p-3 h-100">
+            <h5 class="mb-3">Net worth over time</h5>
+            {% if has_snapshots %}
+                <canvas id="netWorthChart" height="110"></canvas>
+            {% else %}
+                <p class="text-muted mb-0">
+                    Come back tomorrow — this chart fills in automatically as a
+                    daily snapshot is recorded each time you visit the dashboard.
+                </p>
+            {% endif %}
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card p-3 h-100">
+            <h5 class="mb-3">Allocation</h5>
+            {% if has_allocation %}
+                <canvas id="allocationChart" height="180"></canvas>
+            {% else %}
+                <p class="text-muted mb-0">Add cash accounts or holdings to see your allocation breakdown.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{% if has_movers %}
+<div class="row g-4 mb-4">
+    <div class="col-12">
+        <div class="card p-3">
+            <h5 class="mb-3">Today's movers</h5>
+            <canvas id="moversChart" height="90"></canvas>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<div class="row g-4">
+    <div class="col-lg-6">
+        <div class="card p-3">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h5 class="mb-0">Watchlist</h5>
+                <a href="{% url 'watchlist:home' %}" class="small">View all &rarr;</a>
+            </div>
+            {% if watch_rows %}
+            <table class="table table-sm mb-0">
+                <thead><tr><th>Ticker</th><th>Price</th><th>Change</th></tr></thead>
+                <tbody>
+                {% for row in watch_rows %}
+                    <tr>
+                        <td><strong>{{ row.item.ticker }}</strong></td>
+                        <td>{% if row.quote.price %}{{ row.quote.price|floatformat:2 }} {{ row.quote.currency }}{% else %}—{% endif %}</td>
+                        <td>
+                            {% if row.quote.change_pct is not None %}
+                                <span class="badge-change {% if row.quote.change_pct > 0 %}badge-up{% elif row.quote.change_pct < 0 %}badge-down{% else %}badge-flat{% endif %}">
+                                    {% if row.quote.change_pct > 0 %}▲{% elif row.quote.change_pct < 0 %}▼{% endif %}
+                                    {{ row.quote.change_pct|floatformat:2 }}%
+                                </span>
+                            {% else %}—{% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+                <p class="text-muted mb-0">No watchlist items yet. <a href="{% url 'watchlist:add' %}">Add one</a>.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="card p-3">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h5 class="mb-0">Latest news</h5>
+                <a href="{% url 'newsfeed:home' %}" class="small">View all &rarr;</a>
+            </div>
+            {% if news_items %}
+                <ul class="list-unstyled mb-0">
+                {% for item in news_items %}
+                    <li class="mb-2 pb-2 border-bottom">
+                        <a href="{{ item.link }}" target="_blank" rel="noopener">{{ item.title }}</a>
+                        <div class="small text-muted">{{ item.publisher }} {% if item.ticker %}· {{ item.ticker }}{% endif %}</div>
+                    </li>
+                {% endfor %}
+                </ul>
+            {% else %}
+                <p class="text-muted mb-0">No news yet — add holdings or watchlist tickers first.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script>
+(function() {
+    const data = {{ chart_data_json|safe }};
+    const isDark = document.documentElement.getAttribute("data-bs-theme") === "dark";
+    const gridColor = isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.05)";
+    const tickColor = isDark ? "#9ca3af" : "#6c757d";
+
+    {% if has_snapshots %}
+    new Chart(document.getElementById("netWorthChart"), {
+        type: "line",
+        data: {
+            labels: data.trend_labels,
+            datasets: [{
+                label: "Net worth",
+                data: data.trend_values,
+                borderColor: "#4f8ef7",
+                backgroundColor: "rgba(79,142,247,0.12)",
+                fill: true,
+                tension: 0.35,
+                pointRadius: 2,
+            }]
+        },
+        options: {
+            plugins: { legend: { display: false } },
+            scales: {
+                x: { grid: { display: false }, ticks: { color: tickColor } },
+                y: { grid: { color: gridColor }, ticks: { color: tickColor } },
+            },
+        }
+    });
+    {% endif %}
+
+    {% if has_allocation %}
+    new Chart(document.getElementById("allocationChart"), {
+        type: "doughnut",
+        data: {
+            labels: data.allocation_labels,
+            datasets: [{
+                data: data.allocation_values,
+                backgroundColor: data.allocation_colors,
+                borderWidth: 2,
+                borderColor: isDark ? "#1e2126" : "#fff",
+            }]
+        },
+        options: {
+            plugins: { legend: { position: "bottom", labels: { boxWidth: 12, color: tickColor } } },
+            cutout: "65%",
+        }
+    });
+    {% endif %}
+
+    {% if has_movers %}
+    new Chart(document.getElementById("moversChart"), {
+        type: "bar",
+        data: {
+            labels: data.mover_labels,
+            datasets: [{
+                label: "% change",
+                data: data.mover_values,
+                backgroundColor: data.mover_values.map(v => v >= 0 ? "#22c55e" : "#ef4444"),
+                borderRadius: 4,
+            }]
+        },
+        options: {
+            plugins: { legend: { display: false } },
+            scales: {
+                x: { grid: { display: false }, ticks: { color: tickColor } },
+                y: { grid: { color: gridColor }, ticks: { color: tickColor, callback: (v) => v + "%" } },
+            },
+        }
+    });
+    {% endif %}
+})();
+</script>
+
+{% endblock %}
