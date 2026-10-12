@@ -15,10 +15,7 @@ def watchlist_home(request):
     rows = []
     for item in items:
         quote = quotes.get(item.ticker.upper())
-        hit_target = None
-        if item.target_price and quote and quote.price is not None:
-            hit_target = quote.price <= float(item.target_price)
-        rows.append({"item": item, "quote": quote, "hit_target": hit_target})
+        rows.append({"item": item, "quote": quote})
     return render(request, "watchlist/watchlist_home.html", {"rows": rows})
 
 

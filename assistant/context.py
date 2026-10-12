@@ -3,6 +3,7 @@
 import json
 
 from wallet.services import net_worth_summary
+from alerts.models import PriceAlert
 from watchlist.models import WatchlistItem
 
 
@@ -27,9 +28,12 @@ def build_portfolio_context(user) -> str:
         })
 
     watchlist = [
-        {"ticker": w.ticker, "asset_type": w.asset_type,
-         "target_price": float(w.target_price) if w.target_price else None}
+        {"ticker": w.ticker, "asset_type": w.asset_type}
         for w in WatchlistItem.objects.filter(user=user)
+    ]
+    price_alerts = [
+        {"ticker": a.ticker, "direction": a.direction, "target_price": float(a.target_price)}
+        for a in PriceAlert.objects.filter(user=user, is_active=True)
     ]
 
     context = {
@@ -40,5 +44,6 @@ def build_portfolio_context(user) -> str:
         "net_worth": float(summary["net_worth"]),
         "holdings": holdings,
         "watchlist": watchlist,
+        "active_price_alerts": price_alerts,
     }
     return json.dumps(context)

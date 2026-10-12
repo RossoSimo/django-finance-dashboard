@@ -238,3 +238,18 @@ class AlertViewTests(TestCase):
     def test_requires_login(self, *mocks):
         self.client.logout()
         self.assertEqual(self.client.get(reverse("alerts:home")).status_code, 302)
+
+
+class AssistantContextTests(TestCase):
+    def test_active_alerts_are_shared_with_the_assistant(self):
+        import json
+
+        from assistant.context import build_portfolio_context
+
+        user = User.objects.create_user("alice")
+        PriceAlert.objects.create(user=user, ticker="MSFT", direction="below", target_price=D("300"))
+        PriceAlert.objects.create(user=user, ticker="OLD", direction="above", target_price=D("1"), is_active=False)
+        with mock.patch("common.market_data.get_quotes", return_value={}):
+            context = json.loads(build_portfolio_context(user))
+        self.assertEqual(context["active_price_alerts"],
+                         [{"ticker": "MSFT", "direction": "below", "target_price": 300.0}])

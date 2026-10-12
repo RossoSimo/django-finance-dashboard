@@ -5,6 +5,6 @@ from .models import WatchlistItem
 
 @admin.register(WatchlistItem)
 class WatchlistItemAdmin(admin.ModelAdmin):
-    list_display = ("ticker", "user", "asset_type", "target_price", "added_at")
+    list_display = ("ticker", "user", "asset_type", "added_at")
     list_filter = ("user", "asset_type")
     search_fields = ("ticker", "name")
