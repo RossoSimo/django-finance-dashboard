@@ -219,3 +219,11 @@ __marimo__/
 
 # JetBrains IDEs
 .idea/
+
+# Machine-specific editor / AI-tool config
+.mcp.json
+.claude/settings.local.json
+
+# Local env variants (keep the documented template tracked)
+.env.*
+!.env.example
