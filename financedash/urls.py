@@ -9,4 +9,5 @@ urlpatterns = [
     path("news/", include("newsfeed.urls")),
     path("assistant/", include("assistant.urls")),
     path("accounts/", include("accounts.urls")),
+    path("alerts/", include("alerts.urls")),
 ]

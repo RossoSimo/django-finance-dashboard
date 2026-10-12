@@ -120,5 +120,12 @@ templates/         All HTML templates (Bootstrap 5 via CDN)
   confirm. All-or-nothing; rows already recorded are skipped; `;`
   separators, decimal commas and DD/MM/YYYY dates are accepted. A sample
   file is downloadable from the import page.
-- Ideas for later: price alerts, charts (e.g. with Chart.js) for portfolio
+- **Price alerts**: 🔔 Alerts in the navbar, or the 🔔 buttons on the
+  watchlist and wallet. An alert fires once when a ticker rises to/above or
+  falls to/below a price (in the currency it trades in) and stays in a banner
+  until dismissed; re-arm it to watch again. Alerts are checked when you open
+  the dashboard, watchlist or alerts page (at most once a minute). To check
+  on a schedule instead, run `python manage.py check_alerts` from Windows
+  Task Scheduler or cron.
+- Ideas for later: email alerts, charts (e.g. with Chart.js) for portfolio
   performance over time, tags/categories per holding.

@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Price alerts - FinanceDash{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h3 class="mb-0">Price alerts</h3>
+    <a href="{% url 'alerts:add' %}" class="btn btn-sm btn-primary">+ New alert</a>
+</div>
+<p class="text-muted small">Alerts are checked when you open the dashboard, watchlist or this page (at most once a minute).
+    Each alert fires once; re-arm it to watch again.</p>
+
+<div class="card p-3 mb-4">
+    <h5>Watching</h5>
+    {% if active %}
+    <div class="table-responsive">
+    <table class="table table-sm align-middle mb-0">
+        <thead><tr><th>Ticker</th><th>Condition</th><th>Last price</th><th>Checked</th><th>Note</th><th><span class="visually-hidden">Actions</span></th></tr></thead>
+        <tbody>
+        {% for alert in active %}
+            <tr>
+                <td><strong>{{ alert.ticker }}</strong></td>
+                <td>{{ alert.get_direction_display }} {{ alert.target_price|floatformat:"-4" }}</td>
+                <td>{% if alert.last_price is not None %}{{ alert.last_price|floatformat:"-4" }} {{ alert.currency }}{% else %}—{% endif %}</td>
+                <td class="small">{% if alert.last_checked_at %}{{ alert.last_checked_at|timesince }} ago{% else %}not yet{% endif %}</td>
+                <td class="small">{{ alert.note }}</td>
+                <td class="text-end">
+                    <form method="post" action="{% url 'alerts:delete' alert.pk %}" class="d-inline">
+                        {% csrf_token %}
+                        <button class="btn btn-sm btn-outline-danger" type="submit" aria-label="Delete alert for {{ alert.ticker }}">Delete</button>
+                    </form>
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+    {% else %}
+        <p class="text-muted mb-0">No active alerts. Add one here, or from the 🔔 buttons on the watchlist and wallet.</p>
+    {% endif %}
+</div>
+
+<div class="card p-3">
+    <h5>Triggered</h5>
+    {% if triggered %}
+    <div class="table-responsive">
+    <table class="table table-sm align-middle mb-0">
+        <thead><tr><th>Ticker</th><th>Condition</th><th>Triggered</th><th>Price then</th><th>Status</th><th><span class="visually-hidden">Actions</span></th></tr></thead>
+        <tbody>
+        {% for alert in triggered %}
+            <tr>
+                <td><strong>{{ alert.ticker }}</strong></td>
+                <td>{{ alert.get_direction_display }} {{ alert.target_price|floatformat:"-4" }}</td>
+                <td class="small">{{ alert.triggered_at|date:"Y-m-d H:i" }}</td>
+                <td>{{ alert.triggered_price|floatformat:"-4" }} {{ alert.currency }}</td>
+                <td>{% if alert.is_unseen %}<span class="badge text-bg-warning">New</span>{% else %}<span class="badge text-bg-secondary">Seen</span>{% endif %}</td>
+                <td class="text-end text-nowrap">
+                    {% if alert.is_unseen %}
+                    <form method="post" action="{% url 'alerts:dismiss' alert.pk %}" class="d-inline">{% csrf_token %}
+                        <button class="btn btn-sm btn-outline-secondary" type="submit">Dismiss</button></form>
+                    {% endif %}
+                    <form method="post" action="{% url 'alerts:rearm' alert.pk %}" class="d-inline">{% csrf_token %}
+                        <button class="btn btn-sm btn-outline-primary" type="submit">Re-arm</button></form>
+                    <form method="post" action="{% url 'alerts:delete' alert.pk %}" class="d-inline">{% csrf_token %}
+                        <button class="btn btn-sm btn-outline-danger" type="submit" aria-label="Delete alert for {{ alert.ticker }}">Delete</button></form>
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+    {% else %}
+        <p class="text-muted mb-0">Nothing has triggered yet.</p>
+    {% endif %}
+</div>
+{% endblock %}

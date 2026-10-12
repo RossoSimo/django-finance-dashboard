@@ -33,6 +33,7 @@
                 <td class="small">{{ row.item.notes }}</td>
                 <td>
                     <a href="{% url 'newsfeed:home' %}?ticker={{ row.item.ticker }}" class="btn btn-sm btn-outline-secondary">News</a>
+                    <a href="{% url 'alerts:add' %}?ticker={{ row.item.ticker|urlencode }}" class="btn btn-sm btn-outline-secondary" aria-label="Add price alert for {{ row.item.ticker }}">🔔 Alert</a>
                     <form method="post" action="{% url 'watchlist:remove' row.item.pk %}" class="d-inline">
                         {% csrf_token %}
                         <button class="btn btn-sm btn-outline-danger" type="submit" onclick="return confirm('Remove {{ row.item.ticker }}?')">×</button>

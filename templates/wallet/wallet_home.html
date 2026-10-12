@@ -74,6 +74,7 @@
                     {% if row.gain is not None %}{{ row.gain|floatformat:2 }}{% if row.gain_pct is not None %} ({{ row.gain_pct|floatformat:1 }}%){% endif %}{% else %}—{% endif %}
                 </td>
                 <td>
+                    <a href="{% url 'alerts:add' %}?ticker={{ row.holding.ticker|urlencode }}" class="btn btn-sm btn-outline-secondary" aria-label="Add price alert for {{ row.holding.ticker }}">🔔</a>
                     <form method="post" action="{% url 'wallet:delete_holding' row.holding.pk %}" class="d-inline">
                         {% csrf_token %}
                         <button class="btn btn-sm btn-outline-danger" type="submit" onclick="return confirm('Remove {{ row.holding.ticker }}?')">×</button>

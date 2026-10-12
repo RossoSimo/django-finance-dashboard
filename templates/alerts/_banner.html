@@ -1,0 +1,21 @@
+{% if unseen_alerts %}
+<div class="alert alert-warning d-flex flex-wrap align-items-start justify-content-between gap-2" role="status">
+    <div>
+        <strong>🔔 Price alert{{ unseen_alerts|length|pluralize }} triggered</strong>
+        <ul class="mb-0 ps-3">
+        {% for alert in unseen_alerts %}
+            <li>{{ alert.ticker }} {{ alert.get_direction_display }} {{ alert.target_price|floatformat:"-4" }}: hit {{ alert.triggered_price|floatformat:"-4" }} {{ alert.currency }} ({{ alert.triggered_at|timesince }} ago)</li>
+        {% endfor %}
+        {% if unseen_alerts_more %}<li><a href="{% url 'alerts:home' %}">and more…</a></li>{% endif %}
+        </ul>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="{% url 'alerts:home' %}" class="btn btn-sm btn-outline-dark">View</a>
+        <form method="post" action="{% url 'alerts:dismiss_all' %}" class="m-0">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+            <button type="submit" class="btn btn-sm btn-dark">Dismiss all</button>
+        </form>
+    </div>
+</div>
+{% endif %}

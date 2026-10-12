@@ -1,6 +1,7 @@
 from django.contrib import messages
 from django.shortcuts import get_object_or_404, redirect, render
 
+from alerts.services import check_alerts
 from common.market_data import get_quotes
 
 from .forms import WatchlistItemForm
@@ -8,6 +9,7 @@ from .models import WatchlistItem
 
 
 def watchlist_home(request):
+    check_alerts(request.user)
     items = list(WatchlistItem.objects.filter(user=request.user))
     quotes = get_quotes([i.ticker for i in items])
     rows = []

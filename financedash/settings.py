@@ -36,6 +36,7 @@ INSTALLED_APPS = [
     "django.contrib.humanize",
     # Local apps
     "accounts",
+    "alerts",
     "assistant",
     "dashboard",
     "wallet",
@@ -69,6 +70,7 @@ TEMPLATES = [
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
                 "accounts.context_processors.signup_enabled",
+                "alerts.context_processors.triggered_alerts",
             ],
         },
     },

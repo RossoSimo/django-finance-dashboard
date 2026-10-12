@@ -3,6 +3,7 @@ from decimal import Decimal
 
 from django.shortcuts import render
 
+from alerts.services import check_alerts
 from common.market_data import get_news_for_tickers, get_quotes
 from wallet.models import Holding, NetWorthSnapshot
 from wallet.services import net_worth_summary, record_snapshot
@@ -34,6 +35,7 @@ def _decimal_default(o):
 
 
 def home(request):
+    check_alerts(request.user)
     summary = net_worth_summary(request.user)
     record_snapshot(request.user, summary)
 
