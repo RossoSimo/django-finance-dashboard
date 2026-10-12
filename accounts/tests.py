@@ -81,10 +81,10 @@ class DataIsolationTests(TestCase):
     def setUp(self):
         self.alice = User.objects.create_user("alice")
         self.bob = User.objects.create_user("bob")
-        CashAccount.objects.create(user=self.alice, name="Alice bank", balance=Decimal("10"))
-        CashAccount.objects.create(user=self.bob, name="Bob bank", balance=Decimal("999"))
-        self.alice_holding = Holding.objects.create(user=self.alice, ticker="AAPL", quantity=1)
-        self.bob_holding = Holding.objects.create(user=self.bob, ticker="TSLA", quantity=1)
+        CashAccount.objects.create(user=self.alice, name="Alice bank", opening_balance=Decimal("10"))
+        CashAccount.objects.create(user=self.bob, name="Bob bank", opening_balance=Decimal("999"))
+        self.alice_holding = Holding.objects.create(user=self.alice, ticker="AAPL", opening_quantity=1)
+        self.bob_holding = Holding.objects.create(user=self.bob, ticker="TSLA", opening_quantity=1)
         WatchlistItem.objects.create(user=self.alice, ticker="MSFT")
         self.bob_watch = WatchlistItem.objects.create(user=self.bob, ticker="NVDA")
         self.client.force_login(self.alice)
@@ -119,10 +119,10 @@ class DataIsolationTests(TestCase):
 
     def test_new_objects_belong_to_the_current_user(self, *mocks):
         self.client.post(reverse("wallet:add_holding"), {
-            "ticker": "voo", "asset_type": "etf", "quantity": "1", "avg_cost": "1", "currency": "USD",
+            "ticker": "voo", "asset_type": "etf", "opening_quantity": "1", "opening_avg_cost": "1", "currency": "USD",
         })
         self.assertEqual(Holding.objects.get(ticker="VOO").user, self.alice)
-        self.client.post(reverse("wallet:add_cash_account"), {"name": "New", "currency": "EUR", "balance": "5"})
+        self.client.post(reverse("wallet:add_cash_account"), {"name": "New", "currency": "EUR", "opening_balance": "5"})
         self.assertEqual(CashAccount.objects.get(name="New").user, self.alice)
 
     def test_screenshot_import_saves_into_current_user(self, *mocks):

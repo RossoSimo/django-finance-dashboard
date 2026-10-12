@@ -100,6 +100,11 @@ STATICFILES_DIRS = [BASE_DIR / "static"]
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+# Map Django message levels onto Bootstrap alert classes.
+from django.contrib.messages import constants as message_constants  # noqa: E402
+
+MESSAGE_TAGS = {message_constants.ERROR: "danger"}
+
 # --- Authentication ---
 LOGIN_URL = "login"
 LOGIN_REDIRECT_URL = "dashboard:home"
