@@ -27,9 +27,11 @@ These two features are optional; the rest of the app works without Ollama.
 2. Pull a chat model and a vision model:
    ```bash
    ollama pull llama3.1        # portfolio Q&A / analytics
-   ollama pull qwen3-vl:8b     # screenshot -> holdings (fits a 12 GB GPU)
+   ollama pull qwen3-vl:8b-instruct     # screenshot -> holdings (fits a 12 GB GPU)
    ```
-   `qwen2.5vl:7b` is a good alternative vision model. Older models such as
+   Use an *instruct* (non-thinking) vision model: "thinking" editions such as
+   plain `qwen3-vl:8b` reason at length before answering and can run out of
+   room. `qwen2.5vl:7b` is a good alternative. Older models such as
    `llava` are not reliable at reading numbers and tables. Models can be
    changed with `OLLAMA_CHAT_MODEL` / `OLLAMA_VISION_MODEL` in `.env`.
 3. Make sure Ollama is running (`ollama serve`, or the background service).

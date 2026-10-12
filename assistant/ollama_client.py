@@ -7,7 +7,7 @@ installed and running on the same machine (or reachable on your network),
 with the relevant models pulled, e.g.:
 
     ollama pull llama3.1        # text chat / analytics
-    ollama pull qwen3-vl:8b     # vision / screenshot extraction
+    ollama pull qwen3-vl:8b-instruct  # vision / screenshot extraction
 
 If Ollama isn't reachable, functions raise OllamaError with a friendly
 message rather than a raw connection traceback, so views can catch it and
@@ -48,10 +48,23 @@ def _chat(messages: list[dict], model: str, schema: dict | None = None, timeout:
 
     try:
         data = resp.json()
-        return data.get("message", {}).get("content", "")
-    except (ValueError, KeyError) as exc:
+        message = data.get("message", {})
+        content = message.get("content", "")
+    except (ValueError, KeyError, AttributeError) as exc:
         logger.exception("Unexpected Ollama response shape")
         raise OllamaError("Ollama returned an unexpected response.") from exc
+
+    if not content.strip():
+        if message.get("thinking"):
+            # "Thinking" model editions reason before answering and can use up
+            # the whole context, leaving no answer (seen with plain qwen3-vl:8b).
+            raise OllamaError(
+                f"The model '{model}' spent its whole reply 'thinking' and gave no answer. "
+                "Use an instruct (non-thinking) edition, e.g. OLLAMA_VISION_MODEL=qwen3-vl:8b-instruct in .env."
+            )
+        if data.get("done_reason") == "length":
+            raise OllamaError(f"The model '{model}' ran out of room before answering. Try a smaller or cropped image.")
+    return content
 
 
 def ask_portfolio_question(question: str, context_json: str) -> str:
@@ -90,7 +103,9 @@ def extract_portfolio_from_screenshot(image_bytes: bytes) -> dict:
     return data
 
 
-_NUMBER_OR_NULL = {"type": ["number", "null"]}
+# Numbers are transcribed as printed ("2.081,76") and parsed by the app:
+# forcing JSON numbers made the model mangle Italian formats (173,48 -> 173).
+_AMOUNT_OR_NULL = {"type": ["string", "null"]}
 _STRING_OR_NULL = {"type": ["string", "null"]}
 
 # Only what is literally printed on screen. Identifying the security and
@@ -107,10 +122,10 @@ EXTRACTION_SCHEMA = {
                     "name": {"type": "string"},
                     "ticker": _STRING_OR_NULL,
                     "isin": _STRING_OR_NULL,
-                    "quantity": _NUMBER_OR_NULL,
-                    "price": _NUMBER_OR_NULL,
-                    "market_value": _NUMBER_OR_NULL,
-                    "avg_cost": _NUMBER_OR_NULL,
+                    "quantity": _AMOUNT_OR_NULL,
+                    "price": _AMOUNT_OR_NULL,
+                    "market_value": _AMOUNT_OR_NULL,
+                    "avg_cost": _AMOUNT_OR_NULL,
                     "currency": _STRING_OR_NULL,
                 },
                 "required": ["name", "ticker", "isin", "quantity", "price", "market_value", "avg_cost", "currency"],
@@ -122,7 +137,7 @@ EXTRACTION_SCHEMA = {
                 "type": "object",
                 "properties": {
                     "name": {"type": "string"},
-                    "balance": _NUMBER_OR_NULL,
+                    "balance": _AMOUNT_OR_NULL,
                     "currency": _STRING_OR_NULL,
                 },
                 "required": ["name", "balance", "currency"],
@@ -151,7 +166,8 @@ For each position:
 
 For each cash balance: name (account label as shown), balance, currency.
 
-Numbers: output plain numbers. "1.234,56" means 1234.56; "1,234.56" means 1234.56.
+Numbers: copy them as text exactly as printed, including separators, e.g. "2.081,76",
+"0,0125", "1,234.56". Leave out currency symbols and % signs.
 Use null for anything not visible. Skip totals, headers and summary rows.
 Return empty lists if there are no positions or no cash balances.
 """
@@ -172,7 +188,7 @@ def _parse_json_response(raw: str) -> dict:
         raise OllamaError(
             "The model's response wasn't valid JSON, so nothing could be "
             "extracted. Try a clearer/cropped screenshot, or a vision model that "
-            "supports structured output well (e.g. qwen3-vl:8b or qwen2.5vl:7b; set "
+            "supports structured output well (e.g. qwen3-vl:8b-instruct or qwen2.5vl:7b; set "
             "OLLAMA_VISION_MODEL in .env)."
         ) from exc
 

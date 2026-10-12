@@ -24,6 +24,8 @@ LISTINGS = {
     "ENEL.MI": ("Enel SpA", "Milan", "EQUITY", 8.918, "EUR"),
     "AAPL": ("Apple Inc.", "NASDAQ", "EQUITY", 340.97, "USD"),
     "VOD.L": ("Vodafone Group Plc", "London", "EQUITY", 116.7, "GBp"),
+    "BTC": ("Grayscale Bitcoin Mini Trust ETF", "NYSEArca", "ETF", 36.58, "USD"),
+    "BTC-EUR": ("Bitcoin EUR", "CCC", "CRYPTOCURRENCY", 88029.6, "EUR"),
 }
 SEARCH = {
     "IE00BK5BQT80": ["VWRA.L", "IE00BK5BQT80.SG"],
@@ -33,6 +35,8 @@ SEARCH = {
     "APPLE INC": ["AAPL"],
     "AAPL": ["AAPL"],
     "VODAFONE": ["VOD.L"],
+    "BITCOIN": ["BTC"],
+    "BTC": ["BTC"],
 }
 
 
@@ -122,6 +126,17 @@ class MarketCheckTests(TestCase):
         self.assertEqual((c["symbol"], c["live_price"], c["live_currency"], c["status"]),
                          ("VOD.L", "1.167", "GBP", "verified"))
 
+    def test_crypto_ticker_matches_the_currency_pair_not_a_same_named_fund(self):
+        c = checker().check_holding(row(name="Bitcoin", ticker="BTC", quantity="0,0125",
+                                        market_value="1.100,37", currency="EUR"))
+        self.assertEqual((c["symbol"], c["status"], c["asset_type"]), ("BTC-EUR", "verified", "crypto"))
+
+    def test_amounts_transcribed_as_printed_text_are_parsed(self):
+        c = checker().check_holding(row(name="Vanguard FTSE All-World", quantity="12", price="173,48",
+                                        market_value="2.081,76", currency="EUR"))
+        self.assertEqual(c["read"]["market_value"], "2081.76")
+        self.assertEqual((c["symbol"], c["status"]), ("VWCE.DE", "verified"))
+
     def test_unknown_security(self):
         c = checker().check_holding(row(name="Zorblax Imaginary Holdings", quantity=3, price=10, currency="EUR"))
         self.assertEqual(c["status"], "not_found")
@@ -147,18 +162,38 @@ class ExtractionRequestTests(TestCase):
         resp.raise_for_status.return_value = None
         return resp
 
-    @override_settings(OLLAMA_VISION_MODEL="qwen3-vl:8b")
+    @override_settings(OLLAMA_VISION_MODEL="qwen3-vl:8b-instruct")
     def test_sends_schema_image_and_zero_temperature(self):
         reply = json.dumps({"holdings": [row(name="ENEL SPA", quantity=150), row(name="")],
                             "cash_accounts": [{"name": "Conto", "balance": 5, "currency": "EUR"}]})
         with mock.patch("assistant.ollama_client.requests.post", return_value=self.response(reply)) as post:
             data = extract_portfolio_from_screenshot(b"fake-png")
         payload = post.call_args.kwargs["json"]
-        self.assertEqual(payload["model"], "qwen3-vl:8b")
+        self.assertEqual(payload["model"], "qwen3-vl:8b-instruct")
         self.assertEqual(payload["format"], EXTRACTION_SCHEMA)
         self.assertEqual(payload["options"], {"temperature": 0})
         self.assertEqual(len(payload["messages"][0]["images"]), 1)
         self.assertEqual([h["name"] for h in data["holdings"]], ["ENEL SPA"])  # empty rows dropped
+
+    def test_amounts_are_requested_as_text(self):
+        holding = EXTRACTION_SCHEMA["properties"]["holdings"]["items"]["properties"]
+        for field in ("quantity", "price", "market_value", "avg_cost"):
+            self.assertIn("string", holding[field]["type"])
+
+    def test_thinking_model_without_answer_gets_a_clear_error(self):
+        resp = self.response("")
+        resp.json.return_value = {"message": {"content": "", "thinking": "Let me look at row 1..."},
+                                  "done_reason": "length"}
+        with mock.patch("assistant.ollama_client.requests.post", return_value=resp):
+            with self.assertRaisesMessage(OllamaError, "instruct"):
+                extract_portfolio_from_screenshot(b"x")
+
+    def test_truncated_reply_gets_a_clear_error(self):
+        resp = self.response("")
+        resp.json.return_value = {"message": {"content": ""}, "done_reason": "length"}
+        with mock.patch("assistant.ollama_client.requests.post", return_value=resp):
+            with self.assertRaisesMessage(OllamaError, "ran out of room"):
+                extract_portfolio_from_screenshot(b"x")
 
     def test_invalid_json_raises_friendly_error(self):
         with mock.patch("assistant.ollama_client.requests.post", return_value=self.response("not json")):

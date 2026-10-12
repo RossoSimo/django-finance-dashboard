@@ -71,7 +71,7 @@ class MarketChecker:
         rate = self.fx(from_ccy, to_ccy)
         return amount * Decimal(str(rate)) if rate else None
 
-    def _candidates(self, ticker, isin, name) -> list[dict]:
+    def _candidates(self, ticker, isin, name, currency=None) -> list[dict]:
         found: dict[str, dict] = {}
 
         def add(results):
@@ -80,6 +80,10 @@ class MarketChecker:
 
         if ticker:
             add([{"symbol": ticker.upper(), "name": "", "exchange": "", "quote_type": ""}])
+            if currency:
+                # Crypto is listed as pairs (BTC-EUR); a bare "BTC" is a US fund.
+                add([{"symbol": f"{ticker.upper()}-{currency}", "name": "", "exchange": "",
+                      "quote_type": "CRYPTOCURRENCY"}])
             add(self.search(ticker))
         if isin:
             add(self.search(isin))
@@ -120,7 +124,7 @@ class MarketChecker:
                          "check the quantity.")
 
         best, best_score, best_diff = None, None, None
-        for rank, cand in enumerate(self._candidates(ticker, isin, name)):
+        for rank, cand in enumerate(self._candidates(ticker, isin, name, currency)):
             quote = self.quote(cand["symbol"])
             if not quote or quote.price is None:
                 continue

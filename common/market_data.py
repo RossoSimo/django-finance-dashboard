@@ -84,8 +84,9 @@ def get_quote(ticker: str) -> Quote:
             change=change,
             change_pct=change_pct,
         )
-    except Exception:
-        logger.exception("Failed to fetch quote for %s", ticker)
+    except Exception as exc:
+        # Expected for symbols that don't exist (e.g. while matching imports); no traceback.
+        logger.warning("Failed to fetch quote for %s: %s", ticker, exc)
         quote = _empty_quote(ticker)
 
     cache.set(cache_key, quote, settings.MARKET_DATA_CACHE_SECONDS)

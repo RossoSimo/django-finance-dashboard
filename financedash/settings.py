@@ -141,6 +141,6 @@ CACHES = {
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 OLLAMA_CHAT_MODEL = os.getenv("OLLAMA_CHAT_MODEL", "llama3.1")  # portfolio Q&A / analytics
 # Screenshot -> data extraction. Needs a vision model that reads numbers well;
-# qwen3-vl:8b fits a 12 GB GPU (qwen2.5vl:7b is a good alternative).
-OLLAMA_VISION_MODEL = os.getenv("OLLAMA_VISION_MODEL", "qwen3-vl:8b")
+# qwen3-vl:8b-instruct fits a 12 GB GPU (qwen2.5vl:7b is a good alternative).
+OLLAMA_VISION_MODEL = os.getenv("OLLAMA_VISION_MODEL", "qwen3-vl:8b-instruct")
 
