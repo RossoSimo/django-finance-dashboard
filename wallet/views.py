@@ -1,8 +1,11 @@
 from django.contrib import messages
 from django.core.exceptions import ValidationError
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
+from .csv_import import COLUMNS as CSV_COLUMNS
+from .csv_import import MAX_BYTES, MAX_ROWS, SAMPLE_CSV, parse_csv, run_import
 from .forms import CashAccountForm, HoldingForm, TransactionForm
 from .models import CashAccount, Holding, Transaction
 from .services import (
@@ -108,3 +111,48 @@ def delete_holding(request, pk):
         messages.success(request, f"Removed {holding.ticker}.")
         return redirect("wallet:home")
     return render(request, "wallet/confirm_delete.html", {"object": holding})
+
+
+CSV_SESSION_KEY = "csv_import_rows"
+
+
+def csv_sample(request):
+    response = HttpResponse(SAMPLE_CSV, content_type="text/csv; charset=utf-8")
+    response["Content-Disposition"] = 'attachment; filename="transactions-sample.csv"'
+    return response
+
+
+def csv_upload(request):
+    if request.method == "POST":
+        upload = request.FILES.get("file")
+        if not upload:
+            messages.error(request, "Please choose a CSV file.")
+            return redirect("wallet:csv_upload")
+        try:
+            rows = parse_csv(upload.read(MAX_BYTES + 1))
+        except ValidationError as exc:
+            messages.error(request, " ".join(exc.messages))
+            return redirect("wallet:csv_upload")
+        request.session[CSV_SESSION_KEY] = rows
+        return redirect("wallet:csv_preview")
+    return render(request, "wallet/csv_upload.html", {"columns": CSV_COLUMNS, "max_rows": MAX_ROWS})
+
+
+def csv_preview(request):
+    rows = request.session.get(CSV_SESSION_KEY)
+    if not rows:
+        messages.error(request, "Nothing to import; upload a CSV file first.")
+        return redirect("wallet:csv_upload")
+
+    if request.method == "POST":
+        result = run_import(request.user, rows, commit=True)
+        if result.committed:
+            request.session.pop(CSV_SESSION_KEY, None)
+            skipped = f" Skipped {result.duplicate_count} duplicate(s)." if result.duplicate_count else ""
+            messages.success(request, f"Imported {result.ok_count} transaction(s).{skipped}")
+            return redirect("wallet:transaction_list")
+        messages.error(request, "Nothing was imported; fix the rows marked as errors and upload the file again.")
+    else:
+        result = run_import(request.user, rows, commit=False)
+
+    return render(request, "wallet/csv_preview.html", {"result": result})

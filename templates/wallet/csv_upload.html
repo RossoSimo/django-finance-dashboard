@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Import transactions - FinanceDash{% endblock %}
+{% block content %}
+<h3 class="mb-3">Import transactions from CSV</h3>
+<div class="row g-4">
+    <div class="col-lg-5">
+        <div class="card p-4">
+            <form method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+                <div class="mb-3">
+                    <label class="form-label" for="csv-file">CSV file</label>
+                    <input class="form-control" type="file" id="csv-file" name="file" accept=".csv,text/csv" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Preview</button>
+                <a href="{% url 'wallet:transaction_list' %}" class="btn btn-link">Cancel</a>
+            </form>
+            <p class="text-muted small mt-3 mb-0">Nothing is saved until you confirm the preview.</p>
+        </div>
+    </div>
+    <div class="col-lg-7">
+        <div class="card p-4">
+            <h5>Format</h5>
+            <p class="mb-2">One transaction per row, with a header row. Columns (any order):</p>
+            <p><code>{{ columns|join:", " }}</code></p>
+            <ul class="small mb-3">
+                <li><strong>date</strong>: <code>2026-01-31</code> or <code>31/01/2026</code> (day first).</li>
+                <li><strong>type</strong>: buy, sell, deposit, withdraw, dividend (or acquisto, vendita, versamento, prelievo, dividendo).</li>
+                <li><strong>ticker</strong> for buys and sells. Buying a ticker you don't hold yet creates the holding.</li>
+                <li><strong>account</strong>: name of an existing cash account; required for deposits, withdrawals and dividends.</li>
+                <li><strong>quantity</strong> and <strong>price</strong> for buys/sells; <strong>amount</strong> for cash movements.
+                    Decimal commas (<code>1.234,56</code>) and <code>;</code> separators are fine.</li>
+                <li>Rows already recorded are skipped, so re-importing a file is safe. Up to {{ max_rows }} rows.</li>
+            </ul>
+            <a href="{% url 'wallet:csv_sample' %}" class="btn btn-sm btn-outline-secondary">Download a sample file</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

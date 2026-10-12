@@ -115,6 +115,10 @@ templates/         All HTML templates (Bootstrap 5 via CDN)
   can't be fetched, those amounts are left out of the totals with a warning
   rather than added 1:1. Cost basis is converted at today's rate, so gains
   don't include currency movements.
-- Ideas for later: price alerts via email,
-  CSV import of transactions, charts (e.g. with Chart.js) for portfolio
+- **CSV import**: Wallet → Transactions → Import CSV. Upload, review a
+  preview (a full trial run through the same rules as manual entry), then
+  confirm. All-or-nothing; rows already recorded are skipped; `;`
+  separators, decimal commas and DD/MM/YYYY dates are accepted. A sample
+  file is downloadable from the import page.
+- Ideas for later: price alerts, charts (e.g. with Chart.js) for portfolio
   performance over time, tags/categories per holding.

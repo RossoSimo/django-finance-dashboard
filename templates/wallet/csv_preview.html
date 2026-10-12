@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Review import - FinanceDash{% endblock %}
+{% block content %}
+<h3 class="mb-3">Review import</h3>
+
+<div class="card p-3 mb-3">
+    <p class="mb-2">
+        <strong>{{ result.ok_count }}</strong> to import ·
+        <strong>{{ result.duplicate_count }}</strong> duplicate(s) to skip ·
+        <strong class="{% if result.error_count %}text-danger{% endif %}">{{ result.error_count }}</strong> error(s)
+    </p>
+    {% if result.error_count %}
+        <div class="alert alert-danger mb-2" role="alert">
+            Fix the rows marked <strong>Error</strong> in your file and upload it again. Nothing is imported while any row has an error.
+        </div>
+    {% endif %}
+    <div class="d-flex gap-2">
+        {% if not result.error_count and result.ok_count %}
+        <form method="post" class="m-0">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-primary">Import {{ result.ok_count }} transaction(s)</button>
+        </form>
+        {% endif %}
+        <a href="{% url 'wallet:csv_upload' %}" class="btn btn-outline-secondary">Upload another file</a>
+    </div>
+</div>
+
+<div class="card p-3">
+    <div class="table-responsive">
+    <table class="table table-sm align-middle mb-0">
+        <thead><tr><th>Line</th><th>Status</th><th>Date</th><th>Type</th><th>Ticker</th><th>Account</th><th>Qty</th><th>Price</th><th>Amount</th><th>Fees</th><th>Details</th></tr></thead>
+        <tbody>
+        {% for row in result.rows %}
+            <tr class="{% if row.status == 'error' %}table-danger{% elif row.status == 'duplicate' %}table-secondary{% endif %}">
+                <td>{{ row.line }}</td>
+                <td>{% if row.status == 'ok' %}<span class="badge text-bg-success">OK</span>{% elif row.status == 'duplicate' %}<span class="badge text-bg-secondary">Duplicate</span>{% else %}<span class="badge text-bg-danger">Error</span>{% endif %}</td>
+                <td>{{ row.raw.date }}</td>
+                <td>{{ row.raw.type }}</td>
+                <td>{{ row.raw.ticker }}</td>
+                <td>{{ row.raw.account }}</td>
+                <td>{{ row.raw.quantity }}</td>
+                <td>{{ row.raw.price }}</td>
+                <td>{{ row.raw.amount }}</td>
+                <td>{{ row.raw.fees }}</td>
+                <td class="small">{{ row.message }}{% if row.creates_holding %}New holding {{ row.creates_holding }} will be created.{% endif %}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+{% endblock %}
