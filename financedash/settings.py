@@ -138,7 +138,9 @@ CACHES = {
 # --- Ollama (local LLM) settings ---
 # Requires Ollama (https://ollama.com) running locally, with the relevant
 # models pulled: `ollama pull llama3.1` and `ollama pull llava`.
-OLLAMA_BASE_URL = "http://localhost:11434"
-OLLAMA_CHAT_MODEL = "llama3.1"       # used for portfolio Q&A / analytics
-OLLAMA_VISION_MODEL = "llava"        # used for screenshot -> data extraction
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+OLLAMA_CHAT_MODEL = os.getenv("OLLAMA_CHAT_MODEL", "llama3.1")  # portfolio Q&A / analytics
+# Screenshot -> data extraction. Needs a vision model that reads numbers well;
+# qwen3-vl:8b fits a 12 GB GPU (qwen2.5vl:7b is a good alternative).
+OLLAMA_VISION_MODEL = os.getenv("OLLAMA_VISION_MODEL", "qwen3-vl:8b")
 

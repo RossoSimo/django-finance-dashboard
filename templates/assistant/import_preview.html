@@ -3,9 +3,9 @@
 {% block content %}
 
 <h3 class="mb-1">Review before importing</h3>
-<p class="text-muted">
-    Here's what the model read from your screenshot. Uncheck anything wrong,
-    fix values inline, then confirm.
+<p class="text-muted mb-3">
+    Each position was read from your screenshot, then matched to a real market listing and checked against
+    today's price. Fix anything that's off, untick what you don't want, then confirm.
 </p>
 
 <form method="post">
@@ -13,41 +13,91 @@
     {{ holding_formset.management_form }}
     {{ cash_formset.management_form }}
 
-    {% if holding_formset.forms %}
+    {% if holding_rows %}
     <div class="card p-3 mb-4">
-        <h5>Holdings</h5>
-        <table class="table table-sm align-middle">
-            <thead>
-                <tr>
-                    <th></th><th>Ticker</th><th>Name</th><th>Type</th>
-                    <th>Quantity</th><th>Avg cost</th><th>Currency</th>
-                </tr>
-            </thead>
-            <tbody>
-            {% for form in holding_formset %}
-                <tr>
-                    <td>{{ form.include }}</td>
-                    <td>{{ form.ticker }}</td>
-                    <td>{{ form.name }}</td>
-                    <td>{{ form.asset_type }}</td>
-                    <td>{{ form.quantity }}</td>
-                    <td>{{ form.avg_cost }}</td>
-                    <td>{{ form.currency }}</td>
-                </tr>
-                {% if form.errors %}
-                <tr><td colspan="7"><div class="text-danger small">{{ form.errors }}</div></td></tr>
-                {% endif %}
-            {% endfor %}
-            </tbody>
-        </table>
+        <div class="d-flex flex-wrap justify-content-between align-items-baseline gap-2 mb-2">
+            <h5 class="mb-0">Holdings</h5>
+            <span class="small text-muted">{{ verified_count }} of {{ holding_rows|length }} verified against the market</span>
+        </div>
+        {% for form, check in holding_rows %}
+        <div class="border rounded p-3 mb-3 {% if check.status == 'verified' %}border-success{% elif check.status == 'check' %}border-warning{% else %}border-danger{% endif %}">
+            <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-2">
+                <div>
+                    {% if check.status == 'verified' %}<span class="badge text-bg-success">✓ Verified</span>
+                    {% elif check.status == 'check' %}<span class="badge text-bg-warning">⚠ Check</span>
+                    {% else %}<span class="badge text-bg-danger">✗ Not found</span>{% endif %}
+                    <span class="small ms-1">
+                        <strong>Read:</strong> {{ check.read.name|default:"—" }}
+                        {% if check.read.ticker %} · {{ check.read.ticker }}{% endif %}
+                        {% if check.read.isin %} · ISIN {{ check.read.isin }}{% endif %}
+                        {% if check.read.quantity %} · qty {{ check.read.quantity }}{% endif %}
+                        {% if check.read.price %} · price {{ check.read.price }}{% endif %}
+                        {% if check.read.market_value %} · value {{ check.read.market_value }}{% endif %}
+                        {% if check.read.currency %} {{ check.read.currency }}{% endif %}
+                    </span>
+                </div>
+                <div class="form-check m-0">
+                    {{ form.include }}
+                    <label class="form-check-label" for="{{ form.include.id_for_label }}">Import</label>
+                </div>
+            </div>
+            {% if check.symbol %}
+            <p class="small mb-2">
+                <strong>Market:</strong> {{ check.symbol }} — {{ check.symbol_name }}{% if check.exchange %} ({{ check.exchange }}){% endif %}
+                · live {{ check.live_price }} {{ check.live_currency }}
+                {% if check.live_value %} · value now {{ check.live_value }} {{ check.live_currency }}{% endif %}
+            </p>
+            {% endif %}
+            {% if check.notes %}
+            <ul class="small mb-2 ps-3">{% for note in check.notes %}<li>{{ note }}</li>{% endfor %}</ul>
+            {% endif %}
+
+            <div class="row g-2">
+                <div class="col-6 col-md-2">
+                    <label class="form-label small mb-0" for="{{ form.ticker.id_for_label }}">Ticker</label>
+                    {{ form.ticker }}
+                    {% if check.candidates %}
+                    <datalist id="candidates-{{ forloop.counter }}">
+                        {% for c in check.candidates %}<option value="{{ c.symbol }}">{{ c.name }} · {{ c.exchange }} · {{ c.price }} {{ c.currency }}</option>{% endfor %}
+                    </datalist>
+                    {% endif %}
+                </div>
+                <div class="col-6 col-md-3">
+                    <label class="form-label small mb-0" for="{{ form.name.id_for_label }}">Name</label>
+                    {{ form.name }}
+                </div>
+                <div class="col-6 col-md-2">
+                    <label class="form-label small mb-0" for="{{ form.asset_type.id_for_label }}">Type</label>
+                    {{ form.asset_type }}
+                </div>
+                <div class="col-6 col-md-2">
+                    <label class="form-label small mb-0" for="{{ form.quantity.id_for_label }}">Quantity{% if check.quantity_derived %} <span class="text-muted">(derived)</span>{% endif %}</label>
+                    {{ form.quantity }}
+                </div>
+                <div class="col-6 col-md-2">
+                    <label class="form-label small mb-0" for="{{ form.avg_cost.id_for_label }}">Avg cost{% if check.avg_cost_from_market %} <span class="text-muted">(today's price)</span>{% endif %}</label>
+                    {{ form.avg_cost }}
+                </div>
+                <div class="col-6 col-md-1">
+                    <label class="form-label small mb-0" for="{{ form.currency.id_for_label }}">Currency</label>
+                    {{ form.currency }}
+                </div>
+            </div>
+            {% if form.errors %}<div class="text-danger small mt-2">{{ form.errors }}</div>{% endif %}
+            {% if check.candidates %}
+            <script>document.getElementById("{{ form.ticker.id_for_label }}").setAttribute("list", "candidates-{{ forloop.counter }}");</script>
+            {% endif %}
+        </div>
+        {% endfor %}
     </div>
     {% endif %}
 
     {% if cash_formset.forms %}
     <div class="card p-3 mb-4">
         <h5>Cash accounts</h5>
+        <div class="table-responsive">
         <table class="table table-sm align-middle">
-            <thead><tr><th></th><th>Name</th><th>Currency</th><th>Balance</th></tr></thead>
+            <thead><tr><th>Import</th><th>Name</th><th>Currency</th><th>Balance</th></tr></thead>
             <tbody>
             {% for form in cash_formset %}
                 <tr>
@@ -62,6 +112,7 @@
             {% endfor %}
             </tbody>
         </table>
+        </div>
     </div>
     {% endif %}
 

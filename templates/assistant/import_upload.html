@@ -4,17 +4,22 @@
 
 <h3 class="mb-1">📸 Import from screenshot</h3>
 <p class="text-muted">
-    Upload a screenshot of your broker, bank, or portfolio app. A local vision
-    model (via Ollama) will read the cash balances and holdings, then you'll
-    get a chance to review and edit everything before it's saved.
+    Upload a screenshot of your bank, broker or portfolio app, or of a list of your investments.
+    A local vision model (via Ollama) reads each position and cash balance; every position is then
+    matched to a real market listing (by ticker, ISIN or name) and checked against today's price.
+    You review everything before anything is saved.
 </p>
+<ul class="small text-muted">
+    <li>Best results: a sharp, cropped screenshot of the positions table, with quantity and price or value visible.</li>
+    <li>Reading takes about 20–40 seconds (longer the first time, while the model loads).</li>
+</ul>
 
 <div class="card p-4" style="max-width: 600px;">
     <form method="post" enctype="multipart/form-data">
         {% csrf_token %}
         <div class="mb-3">
-            <label class="form-label">Screenshot</label>
-            <input type="file" name="screenshot" accept="image/*" class="form-control" required>
+            <label class="form-label" for="screenshot">Screenshot</label>
+            <input type="file" id="screenshot" name="screenshot" accept="image/*" class="form-control" required>
         </div>
         <button type="submit" class="btn btn-primary">Analyze screenshot</button>
         <a href="{% url 'wallet:home' %}" class="btn btn-link">Cancel</a>

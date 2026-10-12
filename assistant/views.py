@@ -3,6 +3,7 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.shortcuts import redirect, render
 
+from accounts.models import get_base_currency
 from wallet.models import CashAccount, Holding
 from wallet.services import set_cash_balance, set_position
 
@@ -11,8 +12,9 @@ from .forms import (
     CashImportFormSet,
     HoldingImportFormSet,
     cash_initial_from_extracted,
-    holding_initial_from_extracted,
+    holding_initial_from_checks,
 )
+from .market_check import MarketChecker, clean_cash_accounts
 from .ollama_client import OllamaError, ask_portfolio_question, extract_portfolio_from_screenshot
 
 # Quick-action prompts shown as buttons on the chat page.
@@ -68,7 +70,11 @@ def import_upload(request):
             messages.warning(request, "Nothing recognizable was found in that screenshot. Try a clearer image.")
             return redirect("assistant:import_upload")
 
-        request.session["import_extracted"] = extracted
+        # Match every position to a real listing and compare with live prices.
+        request.session["import_extracted"] = {
+            "holdings": MarketChecker().check_holdings(extracted["holdings"]),
+            "cash_accounts": clean_cash_accounts(extracted["cash_accounts"]),
+        }
         return redirect("assistant:import_preview")
 
     return render(request, "assistant/import_upload.html")
@@ -96,16 +102,20 @@ def import_preview(request):
                 messages.success(request, f"Imported {imported} item(s) from the screenshot.")
                 return redirect("wallet:home")
     else:
+        base = get_base_currency(request.user)
         holding_formset = HoldingImportFormSet(
-            initial=holding_initial_from_extracted(extracted.get("holdings")), prefix="holdings"
+            initial=holding_initial_from_checks(extracted.get("holdings"), base), prefix="holdings"
         )
         cash_formset = CashImportFormSet(
-            initial=cash_initial_from_extracted(extracted.get("cash_accounts")), prefix="cash"
+            initial=cash_initial_from_extracted(extracted.get("cash_accounts"), base), prefix="cash"
         )
 
+    checks = extracted.get("holdings") or []
     return render(request, "assistant/import_preview.html", {
         "holding_formset": holding_formset,
         "cash_formset": cash_formset,
+        "holding_rows": list(zip(holding_formset.forms, checks)),
+        "verified_count": sum(1 for c in checks if c["status"] == "verified"),
     })
 
 
@@ -125,7 +135,7 @@ def _import_rows(user, holding_formset, cash_formset) -> int:
             defaults={
                 "name": cd.get("name", ""),
                 "asset_type": cd["asset_type"],
-                "currency": cd.get("currency") or "USD",
+                "currency": cd.get("currency") or get_base_currency(user),
             },
         )
         set_position(holding, cd.get("quantity") or 0, cd.get("avg_cost") or 0)
@@ -138,7 +148,7 @@ def _import_rows(user, holding_formset, cash_formset) -> int:
         account, _ = CashAccount.objects.update_or_create(
             user=user,
             name=cd["name"],
-            defaults={"currency": cd.get("currency") or "USD"},
+            defaults={"currency": cd.get("currency") or get_base_currency(user)},
         )
         balance = cd.get("balance") or 0
         if balance < 0:

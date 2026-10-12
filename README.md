@@ -21,23 +21,30 @@ a free wrapper around Yahoo Finance's public data. No API key needed.
 
 ## Setting up Ollama (for the Assistant + screenshot import)
 
-These two features are optional — the rest of the app works fine without
-Ollama. To enable them:
+These two features are optional; the rest of the app works without Ollama.
 
 1. Install Ollama: https://ollama.com/download
 2. Pull a chat model and a vision model:
    ```bash
    ollama pull llama3.1        # portfolio Q&A / analytics
-   ollama pull llava           # screenshot -> structured data
+   ollama pull qwen3-vl:8b     # screenshot -> holdings (fits a 12 GB GPU)
    ```
-   (`qwen2.5vl` or `llama3.2-vision` also work well as vision models if you
-   have the hardware for them — just update `OLLAMA_VISION_MODEL` in
-   `financedash/settings.py` to match.)
-3. Make sure Ollama is running (`ollama serve`, or it may already be running
-   as a background service after install).
+   `qwen2.5vl:7b` is a good alternative vision model. Older models such as
+   `llava` are not reliable at reading numbers and tables. Models can be
+   changed with `OLLAMA_CHAT_MODEL` / `OLLAMA_VISION_MODEL` in `.env`.
+3. Make sure Ollama is running (`ollama serve`, or the background service).
 4. Visit `/assistant/chat/` or click "🤖 Assistant" / "📸 Import" in the navbar.
 
-If Ollama isn't running, both features will show a friendly error message
+**How the screenshot import works:** the vision model only transcribes what
+is printed (name, ticker/ISIN if shown, quantity, price, value, currency),
+forced into a fixed JSON schema. Each position is then matched to a real
+Yahoo Finance listing by searching its ticker, ISIN and name, preferring the
+listing in the screenshot's currency whose live price matches. The review
+page marks each row ✓ Verified (live price within 5%), ⚠ Check (with the
+reason) or ✗ Not found. Missing quantities are worked out from the value;
+a missing average cost defaults to today's price (editable).
+
+If Ollama isn't running, both features show a friendly error message
 instead of crashing.
 
 ## Setup

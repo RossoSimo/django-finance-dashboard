@@ -7,7 +7,7 @@ installed and running on the same machine (or reachable on your network),
 with the relevant models pulled, e.g.:
 
     ollama pull llama3.1        # text chat / analytics
-    ollama pull llava           # vision / screenshot extraction
+    ollama pull qwen3-vl:8b     # vision / screenshot extraction
 
 If Ollama isn't reachable, functions raise OllamaError with a friendly
 message rather than a raw connection traceback, so views can catch it and
@@ -30,10 +30,14 @@ class OllamaError(Exception):
     """Raised when Ollama can't be reached or returns something unusable."""
 
 
-def _chat(messages: list[dict], model: str) -> str:
+def _chat(messages: list[dict], model: str, schema: dict | None = None, timeout: int = 120) -> str:
     payload = {"model": model, "messages": messages, "stream": False}
+    if schema is not None:
+        # Structured output: Ollama constrains the reply to this JSON schema.
+        payload["format"] = schema
+        payload["options"] = {"temperature": 0}
     try:
-        resp = requests.post(f"{settings.OLLAMA_BASE_URL}/api/chat", json=payload, timeout=120)
+        resp = requests.post(f"{settings.OLLAMA_BASE_URL}/api/chat", json=payload, timeout=timeout)
         resp.raise_for_status()
     except requests.RequestException as exc:
         logger.exception("Ollama request failed")
@@ -77,32 +81,80 @@ def extract_portfolio_from_screenshot(image_bytes: bytes) -> dict:
     parseable JSON.
     """
     b64_image = base64.b64encode(image_bytes).decode("ascii")
+    messages = [{"role": "user", "content": EXTRACTION_PROMPT, "images": [b64_image]}]
+    # Generous timeout: the first call also loads the vision model into memory.
+    raw = _chat(messages, settings.OLLAMA_VISION_MODEL, schema=EXTRACTION_SCHEMA, timeout=300)
+    data = _parse_json_response(raw)
+    data["holdings"] = [h for h in data["holdings"] if isinstance(h, dict) and (h.get("name") or h.get("ticker") or h.get("isin"))]
+    data["cash_accounts"] = [c for c in data["cash_accounts"] if isinstance(c, dict)]
+    return data
 
-    instructions = (
-        "You are looking at a screenshot of a brokerage app, bank app, or "
-        "portfolio tracker. Extract every cash balance and every investment "
-        "holding (stock, ETF, bond, or crypto) visible in the image.\n\n"
-        "Respond with ONLY valid JSON — no markdown code fences, no commentary "
-        "before or after — in exactly this shape:\n"
-        '{"cash_accounts": [{"name": "string", "currency": "USD", "balance": 0.0}], '
-        '"holdings": [{"ticker": "string", "name": "string", '
-        '"asset_type": "stock|etf|bond|crypto|other", "quantity": 0.0, '
-        '"avg_cost": 0.0, "currency": "USD"}]}\n\n'
-        "Rules:\n"
-        "- ticker should be the trading symbol if visible (e.g. AAPL), otherwise "
-        "your best guess from the name.\n"
-        "- avg_cost is the average price paid per unit, if shown; if only current "
-        "price is visible, use that as a best-effort estimate.\n"
-        "- If you're unsure of an exact number, give your best-effort reading "
-        "rather than omitting the row entirely.\n"
-        "- If there are no cash balances visible, return an empty list for "
-        "cash_accounts. If there are no holdings visible, return an empty list "
-        "for holdings."
-    )
 
-    messages = [{"role": "user", "content": instructions, "images": [b64_image]}]
-    raw = _chat(messages, settings.OLLAMA_VISION_MODEL)
-    return _parse_json_response(raw)
+_NUMBER_OR_NULL = {"type": ["number", "null"]}
+_STRING_OR_NULL = {"type": ["string", "null"]}
+
+# Only what is literally printed on screen. Identifying the security and
+# checking prices is done afterwards against market data (market_check.py),
+# so the model never has to guess a ticker.
+EXTRACTION_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "holdings": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string"},
+                    "ticker": _STRING_OR_NULL,
+                    "isin": _STRING_OR_NULL,
+                    "quantity": _NUMBER_OR_NULL,
+                    "price": _NUMBER_OR_NULL,
+                    "market_value": _NUMBER_OR_NULL,
+                    "avg_cost": _NUMBER_OR_NULL,
+                    "currency": _STRING_OR_NULL,
+                },
+                "required": ["name", "ticker", "isin", "quantity", "price", "market_value", "avg_cost", "currency"],
+            },
+        },
+        "cash_accounts": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string"},
+                    "balance": _NUMBER_OR_NULL,
+                    "currency": _STRING_OR_NULL,
+                },
+                "required": ["name", "balance", "currency"],
+            },
+        },
+    },
+    "required": ["holdings", "cash_accounts"],
+}
+
+EXTRACTION_PROMPT = """\
+This is a screenshot of a bank, broker or portfolio app, or a list of investments.
+Transcribe every investment position (one per row: stock, ETF, fund, bond, crypto)
+and every cash balance you can see. Copy values exactly as printed; do not calculate,
+convert or guess anything.
+
+For each position:
+- name: the security name exactly as shown.
+- ticker: the trading symbol ONLY if it is printed (e.g. "AAPL", "VWCE"); otherwise null.
+- isin: the 12-character ISIN ONLY if printed (e.g. "IE00BK5BQT80"); otherwise null.
+- quantity: number of shares/units held (Quantità, Qty, Shares, Units, Pezzi).
+- price: current price per unit, if shown (Prezzo, Last, Price, Quotazione).
+- market_value: current total value of the position, if shown (Controvalore, Valore, Value).
+- avg_cost: average purchase price per unit ONLY if explicitly labelled as such
+  (Prezzo medio, PMC, Avg cost, Carico); otherwise null. Never put the current price here.
+- currency: the 3-letter currency shown for that row (EUR, USD, GBP...), or null.
+
+For each cash balance: name (account label as shown), balance, currency.
+
+Numbers: output plain numbers. "1.234,56" means 1234.56; "1,234.56" means 1234.56.
+Use null for anything not visible. Skip totals, headers and summary rows.
+Return empty lists if there are no positions or no cash balances.
+"""
 
 
 def _parse_json_response(raw: str) -> dict:
@@ -119,8 +171,9 @@ def _parse_json_response(raw: str) -> dict:
         logger.error("Ollama vision response wasn't valid JSON: %s", raw)
         raise OllamaError(
             "The model's response wasn't valid JSON, so nothing could be "
-            "extracted. Try a clearer/cropped screenshot, or a different "
-            "vision model (e.g. llava, qwen2.5-vl, llama3.2-vision)."
+            "extracted. Try a clearer/cropped screenshot, or a vision model that "
+            "supports structured output well (e.g. qwen3-vl:8b or qwen2.5vl:7b; set "
+            "OLLAMA_VISION_MODEL in .env)."
         ) from exc
 
     if not isinstance(data, dict):

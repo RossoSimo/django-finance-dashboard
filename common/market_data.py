@@ -9,6 +9,7 @@ None / empty results rather than crashing a page.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 from dataclasses import dataclass
 from datetime import datetime
@@ -228,3 +229,42 @@ def get_price_history(symbol: str, start) -> list[tuple]:
 
     cache.set(cache_key, series, settings.PRICE_HISTORY_CACHE_SECONDS)
     return series
+
+
+# Security types worth matching a holding against (no futures, options, indices).
+SEARCHABLE_QUOTE_TYPES = {"EQUITY", "ETF", "MUTUALFUND", "CRYPTOCURRENCY"}
+
+
+def search_securities(query: str, limit: int = 5) -> list[dict]:
+    """Look up securities by ticker, ISIN or name via Yahoo search.
+
+    Returns [{"symbol", "name", "exchange", "quote_type"}, ...] in Yahoo's
+    relevance order, cached for a day. Returns [] on failure.
+    """
+    query = (query or "").strip()
+    if not query:
+        return []
+    cache_key = "search:" + hashlib.sha1(query.upper().encode()).hexdigest()  # names contain spaces
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached[:limit]
+    if yf is None:
+        return []
+
+    try:
+        raw = yf.Search(query, max_results=10, news_count=0, lists_count=0, raise_errors=False).quotes or []
+    except Exception:
+        logger.exception("Security search failed for %r", query)
+        return []
+    results = [
+        {
+            "symbol": r["symbol"].upper(),
+            "name": r.get("longname") or r.get("shortname") or r["symbol"],
+            "exchange": r.get("exchDisp") or r.get("exchange") or "",
+            "quote_type": r.get("quoteType") or "",
+        }
+        for r in raw
+        if r.get("symbol") and r.get("quoteType") in SEARCHABLE_QUOTE_TYPES
+    ]
+    cache.set(cache_key, results, 24 * 3600)
+    return results[:limit]
