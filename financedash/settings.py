@@ -118,6 +118,10 @@ SIGNUP_ENABLED = os.getenv("SIGNUP_ENABLED", "True") == "True"
 # How long (seconds) to cache live price/news lookups from yfinance,
 # so the dashboard doesn't hammer Yahoo Finance on every page load.
 MARKET_DATA_CACHE_SECONDS = 60
+# Exchange rates move slowly enough for a personal dashboard.
+FX_CACHE_SECONDS = 900
+# Base currency for new users (each user can change theirs in Settings).
+DEFAULT_BASE_CURRENCY = os.getenv("DEFAULT_BASE_CURRENCY", "EUR")
 NEWS_CACHE_SECONDS = 300
 
 CACHES = {

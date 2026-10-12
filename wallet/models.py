@@ -86,6 +86,7 @@ class NetWorthSnapshot(models.Model):
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="net_worth_snapshots"
     )
     date = models.DateField()
+    currency = models.CharField(max_length=3, default="EUR", help_text="Base currency the totals are in.")
     cash_total = models.DecimalField(max_digits=18, decimal_places=2, default=0)
     holdings_value = models.DecimalField(max_digits=18, decimal_places=2, default=0)
     net_worth = models.DecimalField(max_digits=18, decimal_places=2, default=0)

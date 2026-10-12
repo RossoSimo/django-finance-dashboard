@@ -1,0 +1,6 @@
+{% if summary.missing_currencies %}
+<div class="alert alert-warning" role="alert">
+    ⚠️ No exchange rate available right now for {{ summary.missing_currencies|join:", " }} &rarr; {{ summary.base_currency }}.
+    Amounts in {{ summary.missing_currencies|join:", " }} are <strong>left out of the totals</strong> below until the rate can be fetched.
+</div>
+{% endif %}

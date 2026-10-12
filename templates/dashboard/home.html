@@ -8,13 +8,15 @@
     <p class="text-muted">Here's where things stand today.</p>
 </div>
 
+{% include "wallet/_fx_warning.html" %}
+
 <div class="row g-3 mb-4">
     <div class="col-md-4">
         <div class="card stat-card p-3 h-100" style="--accent:#22c55e;">
             <div class="d-flex justify-content-between align-items-start">
                 <div>
                     <div class="text-muted small">Liquidity (cash)</div>
-                    <div class="fs-3 fw-bold">${{ summary.cash_total|floatformat:2 }}</div>
+                    <div class="fs-3 fw-bold">{{ summary.cash_total|floatformat:2 }} {{ summary.base_currency }}</div>
                 </div>
                 <div class="stat-icon">💵</div>
             </div>
@@ -25,7 +27,7 @@
             <div class="d-flex justify-content-between align-items-start">
                 <div>
                     <div class="text-muted small">Holdings value</div>
-                    <div class="fs-3 fw-bold">${{ summary.holdings_value|floatformat:2 }}</div>
+                    <div class="fs-3 fw-bold">{{ summary.holdings_value|floatformat:2 }} {{ summary.base_currency }}</div>
                 </div>
                 <div class="stat-icon">📈</div>
             </div>
@@ -36,7 +38,7 @@
             <div class="d-flex justify-content-between align-items-start">
                 <div>
                     <div class="text-muted small">Net worth</div>
-                    <div class="fs-3 fw-bold">${{ summary.net_worth|floatformat:2 }}</div>
+                    <div class="fs-3 fw-bold">{{ summary.net_worth|floatformat:2 }} {{ summary.base_currency }}</div>
                 </div>
                 <div class="stat-icon">🏦</div>
             </div>

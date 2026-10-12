@@ -47,7 +47,7 @@ def home(request):
 
     # --- Chart data ---
     # Most recent year of snapshots, oldest first for the chart.
-    snapshots = list(NetWorthSnapshot.objects.filter(user=request.user).order_by("-date")[:365])[::-1]
+    snapshots = list(NetWorthSnapshot.objects.filter(user=request.user, currency=summary["base_currency"]).order_by("-date")[:365])[::-1]
     trend_labels = [s.date.strftime("%b %d") for s in snapshots]
     trend_values = [float(s.net_worth) for s in snapshots]
 

@@ -173,3 +173,29 @@ def get_news_for_tickers(tickers: list[str], limit_per_ticker: int = 5) -> list[
 
     all_items.sort(key=lambda i: i.published or datetime.min, reverse=True)
     return all_items
+
+
+def get_fx_rate(from_currency: str, to_currency: str) -> float | None:
+    """Units of `to_currency` per 1 `from_currency`, from Yahoo's
+    "<FROM><TO>=X" pairs, cached. Returns None if it can't be fetched."""
+    from_currency, to_currency = (from_currency or "").upper(), (to_currency or "").upper()
+    if not from_currency or not to_currency:
+        return None
+    if from_currency == to_currency:
+        return 1.0
+
+    cache_key = f"fx:{from_currency}{to_currency}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    rate = None
+    if yf is not None:
+        try:
+            rate = getattr(yf.Ticker(f"{from_currency}{to_currency}=X").fast_info, "last_price", None)
+        except Exception:
+            logger.exception("Failed to fetch FX rate %s->%s", from_currency, to_currency)
+    if rate is not None and rate > 0:
+        cache.set(cache_key, float(rate), settings.FX_CACHE_SECONDS)
+        return float(rate)
+    return None

@@ -6,6 +6,10 @@ from wallet.services import net_worth_summary
 from watchlist.models import WatchlistItem
 
 
+def _num(value):
+    return float(value) if value is not None else None
+
+
 def build_portfolio_context(user) -> str:
     summary = net_worth_summary(user)
 
@@ -17,8 +21,9 @@ def build_portfolio_context(user) -> str:
             "asset_type": h.asset_type,
             "quantity": float(h.quantity),
             "avg_cost": float(h.avg_cost),
-            "market_value": float(row["market_value"]),
-            "gain_pct": float(row["gain_pct"]) if row["gain_pct"] is not None else None,
+            "avg_cost_currency": h.currency,
+            "market_value": _num(row["market_value"]),  # in base currency; None if no FX rate
+            "gain_pct": _num(row["gain_pct"]),
         })
 
     watchlist = [
@@ -28,6 +33,8 @@ def build_portfolio_context(user) -> str:
     ]
 
     context = {
+        "base_currency": summary["base_currency"],
+        "currencies_without_fx_rate": summary["missing_currencies"],
         "cash_total": float(summary["cash_total"]),
         "holdings_value": float(summary["holdings_value"]),
         "net_worth": float(summary["net_worth"]),

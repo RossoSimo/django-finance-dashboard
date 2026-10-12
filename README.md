@@ -109,6 +109,12 @@ templates/         All HTML templates (Bootstrap 5 via CDN)
 - **This was scaffolded without a live network connection**, so it hasn't
   been run end-to-end. If you hit an error on first run, it's most likely
   a small typo — check the traceback, it'll point straight at the line.
-- Ideas for later: multi-currency FX conversion, price alerts via email,
+- **Currencies**: totals, net worth and charts are shown in your base
+  currency (EUR by default; change it under 👤 → Settings). Other currencies
+  are converted with live Yahoo Finance FX rates (cached 15 min). If a rate
+  can't be fetched, those amounts are left out of the totals with a warning
+  rather than added 1:1. Cost basis is converted at today's rate, so gains
+  don't include currency movements.
+- Ideas for later: price alerts via email,
   CSV import of transactions, charts (e.g. with Chart.js) for portfolio
   performance over time, tags/categories per holding.

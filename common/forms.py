@@ -32,10 +32,17 @@ class UserOwnedFormMixin:
         super().__init__(*args, **kwargs)
         self.user = user
         self.instance.user = user
+        if "currency" in self.fields and self.instance.pk is None:
+            from accounts.models import get_base_currency
+
+            self.initial.setdefault("currency", get_base_currency(user))
         for field in self.fields.values():
             queryset = getattr(field, "queryset", None)
             if queryset is not None and hasattr(queryset.model, "user"):
                 field.queryset = queryset.filter(user=user)
+
+    def clean_currency(self):
+        return self.cleaned_data["currency"].strip().upper()
 
     def clean_ticker(self):
         """Normalise the ticker and enforce per-user uniqueness (the model

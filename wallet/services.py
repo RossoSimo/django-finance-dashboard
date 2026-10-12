@@ -16,6 +16,9 @@ from django.core.exceptions import ValidationError
 from django.db import transaction as db_transaction
 from django.utils import timezone
 
+from accounts.models import get_base_currency
+from common.currency import CurrencyConverter, normalize
+
 from . import ledger
 from .models import CashAccount, Holding, NetWorthSnapshot, Transaction
 
@@ -199,42 +202,67 @@ def set_position(holding: Holding, quantity, avg_cost) -> Holding:
     return recalculate_holding(holding)
 
 
-def net_worth_summary(user):
-    """Return a dict summarizing a user's total liquidity, holdings value, and net worth.
+def net_worth_summary(user, converter: CurrencyConverter | None = None):
+    """Return a dict summarizing a user's liquidity, holdings value and net
+    worth, all in their base currency.
 
-    Uses live prices where available; falls back to cost basis if a quote
-    can't be fetched.
+    Uses live prices where available and falls back to the average cost if a
+    quote can't be fetched. Amounts whose currency can't be converted (no FX
+    rate) are left out of the totals and listed in `missing_currencies`.
+    Cost basis is converted at today's rate, so gains exclude FX movements.
     """
     from common.market_data import get_quotes  # local import to avoid app-loading issues
 
-    cash_total = sum((a.balance for a in CashAccount.objects.filter(user=user)), Decimal("0"))
+    fx = converter or CurrencyConverter(get_base_currency(user))
+    zero = Decimal("0")
+
+    cash_total = zero
+    for account in CashAccount.objects.filter(user=user):
+        converted = fx.convert(account.balance, account.currency)
+        if converted is not None:
+            cash_total += converted
 
     holdings = list(Holding.objects.filter(user=user, quantity__gt=0))
     quotes = get_quotes([h.ticker for h in holdings])
 
-    holdings_value = Decimal("0")
+    holdings_value = zero
     rows = []
-    allocation = {}  # asset_type -> value, for the dashboard donut chart
+    allocation = {}  # asset_type -> value in base currency, for the donut chart
     for h in holdings:
         quote = quotes.get(h.ticker.upper())
-        price = Decimal(str(quote.price)) if quote and quote.price is not None else h.avg_cost
-        market_value = h.quantity * price
-        holdings_value += market_value
-        gain = market_value - h.cost_basis
-        gain_pct = (gain / h.cost_basis * 100) if h.cost_basis else None
+        if quote and quote.price is not None:
+            price, price_currency = normalize(Decimal(str(quote.price)), quote.currency or h.currency)
+        else:
+            price, price_currency = normalize(h.avg_cost, h.currency)
+        market_value_native = h.quantity * price
+        market_value = fx.convert(market_value_native, price_currency)
+        cost_basis = fx.convert(h.cost_basis, h.currency)
+
+        gain = gain_pct = None
+        if market_value is not None and cost_basis is not None:
+            gain = market_value - cost_basis
+            gain_pct = (gain / cost_basis * 100) if cost_basis else None
+        if market_value is not None:
+            holdings_value += market_value
+            allocation[h.asset_type] = allocation.get(h.asset_type, zero) + market_value
+
         rows.append({
             "holding": h,
             "quote": quote,
+            "price": price,
+            "price_currency": price_currency,
+            "market_value_native": market_value_native,
             "market_value": market_value,
             "gain": gain,
             "gain_pct": gain_pct,
         })
-        allocation[h.asset_type] = allocation.get(h.asset_type, Decimal("0")) + market_value
 
     if cash_total > 0:
-        allocation["cash"] = allocation.get("cash", Decimal("0")) + cash_total
+        allocation["cash"] = allocation.get("cash", zero) + cash_total
 
     return {
+        "base_currency": fx.base,
+        "missing_currencies": sorted(fx.missing),
         "cash_total": cash_total,
         "holdings_value": holdings_value,
         "net_worth": cash_total + holdings_value,
@@ -243,17 +271,22 @@ def net_worth_summary(user):
     }
 
 
-def record_snapshot(user, summary: dict | None = None) -> NetWorthSnapshot:
+def record_snapshot(user, summary: dict | None = None) -> NetWorthSnapshot | None:
     """Upsert the user's NetWorthSnapshot for today from their net worth summary.
 
     Called from the dashboard view on every visit so the trend chart
-    naturally fills in over time without needing a scheduled job.
+    naturally fills in over time without needing a scheduled job. Skipped
+    (returns None) when some amounts couldn't be converted, so the chart
+    never records an incomplete total.
     """
     summary = summary or net_worth_summary(user)
+    if summary["missing_currencies"]:
+        return None
     snapshot, _created = NetWorthSnapshot.objects.update_or_create(
         user=user,
         date=date_cls.today(),
         defaults={
+            "currency": summary["base_currency"],
             "cash_total": summary["cash_total"],
             "holdings_value": summary["holdings_value"],
             "net_worth": summary["net_worth"],

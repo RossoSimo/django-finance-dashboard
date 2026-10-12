@@ -5,6 +5,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
+from accounts.models import Profile
 from wallet.models import CashAccount, Holding, NetWorthSnapshot
 from watchlist.forms import WatchlistItemForm
 from watchlist.models import WatchlistItem
@@ -81,6 +82,8 @@ class DataIsolationTests(TestCase):
     def setUp(self):
         self.alice = User.objects.create_user("alice")
         self.bob = User.objects.create_user("bob")
+        for user in (self.alice, self.bob):  # data below is USD; avoid FX lookups
+            Profile.objects.create(user=user, base_currency="USD")
         CashAccount.objects.create(user=self.alice, name="Alice bank", opening_balance=Decimal("10"))
         CashAccount.objects.create(user=self.bob, name="Bob bank", opening_balance=Decimal("999"))
         self.alice_holding = Holding.objects.create(user=self.alice, ticker="AAPL", opening_quantity=1)

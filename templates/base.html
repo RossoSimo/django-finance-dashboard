@@ -96,7 +96,7 @@
                 {% if user.is_staff %}<li class="nav-item"><a class="nav-link" href="/admin/">Admin</a></li>{% endif %}
             </ul>
             <div class="d-flex align-items-center gap-2 me-2">
-                <a class="nav-link text-light small" href="{% url 'password_change' %}" title="Change password">👤 {{ user.get_username }}</a>
+                <a class="nav-link text-light small" href="{% url 'settings' %}" title="Settings">👤 {{ user.get_username }}</a>
                 <form method="post" action="{% url 'logout' %}" class="m-0">
                     {% csrf_token %}
                     <button type="submit" class="btn btn-sm btn-outline-light">Log out</button>

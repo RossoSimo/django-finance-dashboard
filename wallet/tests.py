@@ -13,6 +13,9 @@ from common.market_data import Quote
 
 from . import ledger
 from .forms import CashAccountForm, HoldingForm, TransactionForm
+from accounts.models import get_profile
+from common.currency import CurrencyConverter, normalize
+
 from .models import CashAccount, Holding, NetWorthSnapshot, Transaction
 from .services import (
     delete_transaction,
@@ -31,6 +34,17 @@ User = get_user_model()
 def make_quote(ticker, price):
     return Quote(ticker=ticker, name=None, price=price, previous_close=None,
                  currency="USD", change=None, change_pct=None)
+
+
+def set_base_currency(user, currency):
+    profile = get_profile(user)
+    profile.base_currency = currency
+    profile.save()
+
+
+def fake_rates(**rates):
+    """rate_fn for CurrencyConverter: fake_rates(USD=0.9) means 1 USD = 0.9 base."""
+    return lambda from_ccy, to_ccy: rates.get(from_ccy)
 
 
 def tx(tx_type, quantity=None, price=None, amount=None, fees=D("0")):
@@ -266,8 +280,12 @@ class TransactionFormTests(TestCase):
 
 @mock.patch("common.market_data.get_quotes")
 class NetWorthSummaryTests(TestCase):
+    """All amounts are USD with a USD base, so no conversion happens here;
+    see CurrencyConversionTests for mixed currencies."""
+
     def setUp(self):
         self.user = u = User.objects.create_user("alice")
+        set_base_currency(u, "USD")
         CashAccount.objects.create(user=u, name="Bank", opening_balance=D("500.00"))
         CashAccount.objects.create(user=u, name="Broker", opening_balance=D("250.00"))
         self.aapl = Holding.objects.create(user=u, ticker="AAPL", asset_type="stock",
@@ -324,7 +342,8 @@ class NetWorthSummaryTests(TestCase):
 
 
 class RecordSnapshotTests(TestCase):
-    summary = {"cash_total": D("10"), "holdings_value": D("20"), "net_worth": D("30")}
+    summary = {"cash_total": D("10"), "holdings_value": D("20"), "net_worth": D("30"),
+               "base_currency": "EUR", "missing_currencies": []}
 
     def setUp(self):
         self.user = User.objects.create_user("alice")
@@ -436,7 +455,8 @@ class EditDeleteTransactionViewTests(TestCase):
                 self.assertEqual(self.client.post(url).status_code, 404)
         self.assertTrue(Transaction.objects.filter(pk=self.tx.pk).exists())
 
-    def test_holding_with_history_is_not_removed(self):
+    @mock.patch("common.market_data.get_quotes", return_value={})
+    def test_holding_with_history_is_not_removed(self, _quotes):
         holding = Holding.objects.create(user=self.user, ticker="AAPL")
         save_transaction(Transaction(user=self.user, tx_type="buy", holding=holding,
                                      quantity=D("1"), price=D("1"), date=date(2026, 1, 1)))
@@ -609,3 +629,167 @@ class ConsistencyViewTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, "only hold 1 AAPL")
         self.assertFalse(Transaction.objects.exists())
+
+
+class CurrencyConversionTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user("alice")  # base currency defaults to EUR
+        CashAccount.objects.create(user=self.user, name="Conto", currency="EUR", opening_balance=D("100.00"))
+        CashAccount.objects.create(user=self.user, name="Broker", currency="USD", opening_balance=D("200.00"))
+        self.aapl = Holding.objects.create(user=self.user, ticker="AAPL", currency="USD",
+                                           opening_quantity=D("10"), opening_avg_cost=D("100"))
+
+    def summary(self, quotes, **rates):
+        with mock.patch("common.market_data.get_quotes", return_value=quotes):
+            return net_worth_summary(self.user, CurrencyConverter("EUR", fake_rates(**rates)))
+
+    def test_default_base_currency_is_eur(self):
+        self.assertEqual(get_profile(self.user).base_currency, "EUR")
+
+    def test_totals_are_converted_into_the_base_currency(self):
+        quote = make_quote("AAPL", 120.0)  # currency USD
+        s = self.summary({"AAPL": quote}, USD=0.9)
+        self.assertEqual(s["base_currency"], "EUR")
+        self.assertEqual(s["missing_currencies"], [])
+        self.assertEqual(s["cash_total"], D("280.00"))  # 100 EUR + 200 USD * 0.9
+        self.assertEqual(s["holdings_value"], D("1080.0"))  # 10 * 120 USD * 0.9
+        self.assertEqual(s["net_worth"], D("1360.00"))
+        row = s["rows"][0]
+        self.assertEqual(row["market_value_native"], D("1200.0"))
+        self.assertEqual(row["price_currency"], "USD")
+        self.assertEqual(row["gain"], D("180.00"))  # (1200 - 1000) * 0.9
+        self.assertEqual(row["gain_pct"], D("20"))
+
+    def test_missing_rate_is_excluded_and_reported(self):
+        s = self.summary({"AAPL": make_quote("AAPL", 120.0)})  # no USD rate
+        self.assertEqual(s["missing_currencies"], ["USD"])
+        self.assertEqual(s["cash_total"], D("100.00"))  # only the EUR account
+        self.assertEqual(s["holdings_value"], D("0"))
+        row = s["rows"][0]
+        self.assertIsNone(row["market_value"])
+        self.assertIsNone(row["gain"])
+        self.assertEqual(row["market_value_native"], D("1200.0"))
+
+    def test_incomplete_totals_are_not_snapshotted(self):
+        s = self.summary({"AAPL": make_quote("AAPL", 120.0)})
+        self.assertIsNone(record_snapshot(self.user, s))
+        self.assertFalse(NetWorthSnapshot.objects.exists())
+
+    def test_snapshot_records_its_currency(self):
+        s = self.summary({"AAPL": make_quote("AAPL", 120.0)}, USD=0.9)
+        self.assertEqual(record_snapshot(self.user, s).currency, "EUR")
+
+    def test_pence_quotes_are_converted_to_pounds(self):
+        Holding.objects.create(user=self.user, ticker="VOD.L", currency="GBP",
+                               opening_quantity=D("100"), opening_avg_cost=D("0.70"))
+        pence = Quote(ticker="VOD.L", name=None, price=75.0, previous_close=None,
+                      currency="GBp", change=None, change_pct=None)
+        s = self.summary({"AAPL": make_quote("AAPL", 100.0), "VOD.L": pence}, USD=1, GBP=1.2)
+        row = next(r for r in s["rows"] if r["holding"].ticker == "VOD.L")
+        self.assertEqual(row["price"], D("0.75"))
+        self.assertEqual(row["price_currency"], "GBP")
+        self.assertEqual(row["market_value"], D("90.000"))  # 100 * 0.75 GBP * 1.2
+        self.assertEqual(row["gain"], D("6.000"))  # (75 - 70) GBP * 1.2
+
+    def test_holding_and_quote_in_different_currencies(self):
+        # Cost recorded in EUR, but the stock is quoted in USD.
+        self.aapl.currency = "EUR"
+        self.aapl.save()
+        s = self.summary({"AAPL": make_quote("AAPL", 120.0)}, USD=0.5)
+        row = s["rows"][0]
+        self.assertEqual(row["market_value"], D("600.0"))  # 1200 USD * 0.5
+        self.assertEqual(row["gain"], D("-400.0"))  # 600 EUR - 1000 EUR cost
+
+    def test_without_quote_cost_is_used_in_its_own_currency(self):
+        s = self.summary({}, USD=0.9)
+        row = s["rows"][0]
+        self.assertEqual(row["market_value"], D("900.0"))
+        self.assertEqual(row["gain"], D("0.0"))
+
+
+class CurrencyHelperTests(TestCase):
+    def test_normalize_minor_units(self):
+        self.assertEqual(normalize(D("1234"), "GBp"), (D("12.34"), "GBP"))
+        self.assertEqual(normalize(D("500"), "ZAc"), (D("5"), "ZAR"))
+        self.assertEqual(normalize(D("5"), "usd"), (D("5"), "USD"))
+        self.assertEqual(normalize(None, "GBp"), (None, "GBP"))
+
+    def test_converter_fetches_each_rate_once_and_tracks_missing(self):
+        calls = []
+
+        def rate_fn(from_ccy, to_ccy):
+            calls.append((from_ccy, to_ccy))
+            return {"USD": 0.5}.get(from_ccy)
+
+        fx = CurrencyConverter("eur", rate_fn)
+        self.assertEqual(fx.convert(D("10"), "EUR"), D("10"))
+        self.assertEqual(fx.convert(D("10"), "USD"), D("5.0"))
+        self.assertEqual(fx.convert(D("4"), "USD"), D("2.0"))
+        self.assertIsNone(fx.convert(D("10"), "JPY"))
+        self.assertIsNone(fx.convert(D("1"), "JPY"))
+        self.assertEqual(calls, [("USD", "EUR"), ("JPY", "EUR")])
+        self.assertEqual(fx.missing, {"JPY"})
+        self.assertIsNone(fx.convert(None, "USD"))
+
+    def test_get_fx_rate_uses_yahoo_pair_and_caches(self):
+        from django.core.cache import cache
+
+        from common import market_data
+
+        cache.clear()
+        fake = mock.Mock()
+        fake.return_value.fast_info.last_price = 0.92
+        with mock.patch.object(market_data, "yf", mock.Mock(Ticker=fake)):
+            self.assertEqual(market_data.get_fx_rate("usd", "eur"), 0.92)
+            self.assertEqual(market_data.get_fx_rate("USD", "EUR"), 0.92)
+            self.assertEqual(market_data.get_fx_rate("EUR", "EUR"), 1.0)
+        fake.assert_called_once_with("USDEUR=X")
+
+    def test_get_fx_rate_fails_soft(self):
+        from django.core.cache import cache
+
+        from common import market_data
+
+        cache.clear()
+        with mock.patch.object(market_data, "yf", mock.Mock(Ticker=mock.Mock(side_effect=RuntimeError))):
+            self.assertIsNone(market_data.get_fx_rate("USD", "EUR"))
+
+
+@mock.patch("dashboard.views.get_news_for_tickers", return_value=[])
+@mock.patch("dashboard.views.get_quotes", return_value={})
+@mock.patch("common.market_data.get_quotes", return_value={})
+class CurrencyViewTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user("alice")
+        self.client.force_login(self.user)
+
+    def test_dashboard_shows_base_currency_and_missing_rate_warning(self, *mocks):
+        CashAccount.objects.create(user=self.user, name="Broker", currency="USD", opening_balance=D("5"))
+        with mock.patch("common.market_data.get_fx_rate", return_value=None):
+            resp = self.client.get(reverse("dashboard:home"))
+        self.assertContains(resp, "0.00 EUR")
+        self.assertContains(resp, "left out of the totals")
+        self.assertFalse(NetWorthSnapshot.objects.exists())
+
+    def test_trend_chart_only_uses_snapshots_in_the_base_currency(self, *mocks):
+        NetWorthSnapshot.objects.create(user=self.user, date=date(2026, 1, 1), currency="USD", net_worth=D("1"))
+        NetWorthSnapshot.objects.create(user=self.user, date=date(2026, 1, 2), currency="EUR", net_worth=D("2"))
+        resp = self.client.get(reverse("dashboard:home"))
+        chart = resp.context["chart_data_json"]
+        self.assertIn("2.0", chart)
+        self.assertNotIn("1.0,", chart)
+
+    def test_settings_page_changes_base_currency(self, *mocks):
+        resp = self.client.post(reverse("settings"), {"base_currency": "USD"})
+        self.assertRedirects(resp, reverse("settings"), fetch_redirect_response=False)
+        self.assertEqual(get_profile(self.user).base_currency, "USD")
+        self.assertContains(self.client.get(reverse("dashboard:home")), "0.00 USD")
+
+    def test_settings_rejects_unknown_currency(self, *mocks):
+        resp = self.client.post(reverse("settings"), {"base_currency": "XXX"})
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(get_profile(self.user).base_currency, "EUR")
+
+    def test_new_account_form_defaults_to_base_currency(self, *mocks):
+        form = self.client.get(reverse("wallet:add_cash_account")).context["form"]
+        self.assertEqual(form["currency"].value(), "EUR")

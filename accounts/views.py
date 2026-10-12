@@ -5,7 +5,8 @@ from django.contrib.auth.decorators import login_not_required
 from django.http import Http404
 from django.shortcuts import redirect, render
 
-from .forms import SignupForm
+from .forms import ProfileForm, SignupForm
+from .models import get_profile
 
 
 @login_not_required
@@ -24,3 +25,16 @@ def signup(request):
     else:
         form = SignupForm()
     return render(request, "registration/signup.html", {"form": form})
+
+
+def profile_settings(request):
+    profile = get_profile(request.user)
+    if request.method == "POST":
+        form = ProfileForm(request.POST, instance=profile)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f"Settings saved. Totals are now shown in {profile.base_currency}.")
+            return redirect("settings")
+    else:
+        form = ProfileForm(instance=profile)
+    return render(request, "registration/settings.html", {"form": form})
