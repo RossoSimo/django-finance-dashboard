@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 
 ASSET_TYPES = [
@@ -12,6 +13,9 @@ ASSET_TYPES = [
 class CashAccount(models.Model):
     """A pool of liquidity, e.g. 'Broker cash', 'Bank account', 'Savings'."""
 
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="cash_accounts"
+    )
     name = models.CharField(max_length=100)
     currency = models.CharField(max_length=10, default="USD")
     balance = models.DecimalField(max_digits=18, decimal_places=2, default=0)
@@ -26,7 +30,10 @@ class CashAccount(models.Model):
 class Holding(models.Model):
     """A position you own in a given ticker."""
 
-    ticker = models.CharField(max_length=20, unique=True)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="holdings"
+    )
+    ticker = models.CharField(max_length=20)
     name = models.CharField(max_length=200, blank=True)
     asset_type = models.CharField(max_length=10, choices=ASSET_TYPES, default="stock")
     quantity = models.DecimalField(max_digits=18, decimal_places=6, default=0)
@@ -37,6 +44,9 @@ class Holding(models.Model):
 
     class Meta:
         ordering = ["ticker"]
+        constraints = [
+            models.UniqueConstraint(fields=["user", "ticker"], name="unique_holding_ticker_per_user"),
+        ]
 
     def __str__(self):
         return self.ticker
@@ -48,16 +58,22 @@ class Holding(models.Model):
 
 class NetWorthSnapshot(models.Model):
     """A daily snapshot of net worth, used to draw the trend chart on the
-    dashboard. One row per calendar date; recorded automatically whenever
+    dashboard. One row per user per calendar date; recorded automatically whenever
     the dashboard is viewed."""
 
-    date = models.DateField(unique=True)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="net_worth_snapshots"
+    )
+    date = models.DateField()
     cash_total = models.DecimalField(max_digits=18, decimal_places=2, default=0)
     holdings_value = models.DecimalField(max_digits=18, decimal_places=2, default=0)
     net_worth = models.DecimalField(max_digits=18, decimal_places=2, default=0)
 
     class Meta:
         ordering = ["date"]
+        constraints = [
+            models.UniqueConstraint(fields=["user", "date"], name="unique_snapshot_date_per_user"),
+        ]
 
     def __str__(self):
         return f"{self.date}: {self.net_worth}"
@@ -74,6 +90,9 @@ class Transaction(models.Model):
         ("dividend", "Dividend"),
     ]
 
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="transactions"
+    )
     tx_type = models.CharField(max_length=10, choices=TX_TYPES)
     holding = models.ForeignKey(
         Holding, null=True, blank=True, on_delete=models.SET_NULL, related_name="transactions"

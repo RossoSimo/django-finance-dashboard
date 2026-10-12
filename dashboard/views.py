@@ -34,19 +34,20 @@ def _decimal_default(o):
 
 
 def home(request):
-    summary = net_worth_summary()
-    record_snapshot(summary)
+    summary = net_worth_summary(request.user)
+    record_snapshot(request.user, summary)
 
-    watchlist_items = list(WatchlistItem.objects.all()[:8])
+    watchlist_items = list(WatchlistItem.objects.filter(user=request.user)[:8])
     watch_quotes = get_quotes([i.ticker for i in watchlist_items])
     watch_rows = [{"item": i, "quote": watch_quotes.get(i.ticker.upper())} for i in watchlist_items]
 
-    holding_tickers = list(Holding.objects.values_list("ticker", flat=True))
-    watch_tickers = list(WatchlistItem.objects.values_list("ticker", flat=True))
+    holding_tickers = list(Holding.objects.filter(user=request.user).values_list("ticker", flat=True))
+    watch_tickers = list(WatchlistItem.objects.filter(user=request.user).values_list("ticker", flat=True))
     news_items = get_news_for_tickers(list(set(holding_tickers) | set(watch_tickers)), limit_per_ticker=3)[:8]
 
     # --- Chart data ---
-    snapshots = list(NetWorthSnapshot.objects.order_by("date")[:365])
+    # Most recent year of snapshots, oldest first for the chart.
+    snapshots = list(NetWorthSnapshot.objects.filter(user=request.user).order_by("-date")[:365])[::-1]
     trend_labels = [s.date.strftime("%b %d") for s in snapshots]
     trend_values = [float(s.net_worth) for s in snapshots]
 

@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Log in - FinanceDash{% endblock %}
+{% block content %}
+<div class="card p-4 mx-auto" style="max-width: 420px;">
+    <h3 class="mb-3">Log in</h3>
+    <form method="post" action="{% url 'login' %}">
+        {% csrf_token %}
+        {% include "registration/_form_fields.html" %}
+        <input type="hidden" name="next" value="{{ next }}">
+        <button type="submit" class="btn btn-primary w-100">Log in</button>
+    </form>
+    {% if signup_enabled %}
+        <p class="mt-3 mb-0 text-center small">No account? <a href="{% url 'signup' %}">Sign up</a></p>
+    {% endif %}
+</div>
+{% endblock %}

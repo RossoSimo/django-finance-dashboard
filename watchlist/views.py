@@ -8,7 +8,7 @@ from .models import WatchlistItem
 
 
 def watchlist_home(request):
-    items = list(WatchlistItem.objects.all())
+    items = list(WatchlistItem.objects.filter(user=request.user))
     quotes = get_quotes([i.ticker for i in items])
     rows = []
     for item in items:
@@ -22,18 +22,18 @@ def watchlist_home(request):
 
 def add_watchlist_item(request):
     if request.method == "POST":
-        form = WatchlistItemForm(request.POST)
+        form = WatchlistItemForm(request.POST, user=request.user)
         if form.is_valid():
             form.save()
             messages.success(request, "Added to watchlist.")
             return redirect("watchlist:home")
     else:
-        form = WatchlistItemForm()
+        form = WatchlistItemForm(user=request.user)
     return render(request, "watchlist/form.html", {"form": form, "title": "Add to watchlist"})
 
 
 def remove_watchlist_item(request, pk):
-    item = get_object_or_404(WatchlistItem, pk=pk)
+    item = get_object_or_404(WatchlistItem, pk=pk, user=request.user)
     if request.method == "POST":
         item.delete()
         messages.success(request, f"Removed {item.ticker} from watchlist.")

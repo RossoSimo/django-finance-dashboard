@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Import from screenshot - FinanceDash{% endblock %}
+{% block content %}
+
+<h3 class="mb-1">📸 Import from screenshot</h3>
+<p class="text-muted">
+    Upload a screenshot of your broker, bank, or portfolio app. A local vision
+    model (via Ollama) will read the cash balances and holdings, then you'll
+    get a chance to review and edit everything before it's saved.
+</p>
+
+<div class="card p-4" style="max-width: 600px;">
+    <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        <div class="mb-3">
+            <label class="form-label">Screenshot</label>
+            <input type="file" name="screenshot" accept="image/*" class="form-control" required>
+        </div>
+        <button type="submit" class="btn btn-primary">Analyze screenshot</button>
+        <a href="{% url 'wallet:home' %}" class="btn btn-link">Cancel</a>
+    </form>
+</div>
+
+<div class="alert alert-info mt-3" style="max-width: 600px;">
+    <strong>Heads up:</strong> importing a ticker that already exists as a
+    holding will <em>overwrite</em> its quantity/avg cost with the extracted
+    values (not add to them). Double-check the review screen before confirming.
+</div>
+
+{% endblock %}

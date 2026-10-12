@@ -12,8 +12,8 @@ def news_home(request):
         items = get_news_for_ticker(ticker_filter, limit=25)
         tickers = [ticker_filter]
     else:
-        holding_tickers = list(Holding.objects.values_list("ticker", flat=True))
-        watch_tickers = list(WatchlistItem.objects.values_list("ticker", flat=True))
+        holding_tickers = list(Holding.objects.filter(user=request.user).values_list("ticker", flat=True))
+        watch_tickers = list(WatchlistItem.objects.filter(user=request.user).values_list("ticker", flat=True))
         tickers = sorted(set(holding_tickers) | set(watch_tickers))
         items = get_news_for_tickers(tickers, limit_per_ticker=5)
 

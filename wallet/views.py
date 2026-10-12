@@ -8,9 +8,9 @@ from .services import apply_transaction, net_worth_summary
 
 
 def wallet_home(request):
-    summary = net_worth_summary()
-    cash_accounts = CashAccount.objects.all()
-    recent_tx = Transaction.objects.select_related("holding", "cash_account")[:15]
+    summary = net_worth_summary(request.user)
+    cash_accounts = CashAccount.objects.filter(user=request.user)
+    recent_tx = Transaction.objects.filter(user=request.user).select_related("holding", "cash_account")[:15]
     return render(request, "wallet/wallet_home.html", {
         "summary": summary,
         "cash_accounts": cash_accounts,
@@ -20,48 +20,48 @@ def wallet_home(request):
 
 def add_cash_account(request):
     if request.method == "POST":
-        form = CashAccountForm(request.POST)
+        form = CashAccountForm(request.POST, user=request.user)
         if form.is_valid():
             form.save()
             messages.success(request, "Cash account added.")
             return redirect("wallet:home")
     else:
-        form = CashAccountForm()
+        form = CashAccountForm(user=request.user)
     return render(request, "wallet/form.html", {"form": form, "title": "Add cash account"})
 
 
 def add_holding(request):
     if request.method == "POST":
-        form = HoldingForm(request.POST)
+        form = HoldingForm(request.POST, user=request.user)
         if form.is_valid():
             form.save()
             messages.success(request, "Holding added.")
             return redirect("wallet:home")
     else:
-        form = HoldingForm()
+        form = HoldingForm(user=request.user)
     return render(request, "wallet/form.html", {"form": form, "title": "Add holding"})
 
 
 def add_transaction(request):
     if request.method == "POST":
-        form = TransactionForm(request.POST)
+        form = TransactionForm(request.POST, user=request.user)
         if form.is_valid():
             tx = form.save()
             apply_transaction(tx)
             messages.success(request, "Transaction recorded.")
             return redirect("wallet:home")
     else:
-        form = TransactionForm()
+        form = TransactionForm(user=request.user)
     return render(request, "wallet/form.html", {"form": form, "title": "Add transaction"})
 
 
 def transaction_list(request):
-    tx = Transaction.objects.select_related("holding", "cash_account")
+    tx = Transaction.objects.filter(user=request.user).select_related("holding", "cash_account")
     return render(request, "wallet/transaction_list.html", {"transactions": tx})
 
 
 def delete_holding(request, pk):
-    holding = get_object_or_404(Holding, pk=pk)
+    holding = get_object_or_404(Holding, pk=pk, user=request.user)
     if request.method == "POST":
         holding.delete()
         messages.success(request, f"Removed {holding.ticker}.")

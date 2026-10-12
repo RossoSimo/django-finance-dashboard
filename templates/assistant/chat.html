@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Assistant - FinanceDash{% endblock %}
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <h3 class="mb-1">🤖 Portfolio Assistant</h3>
+        <p class="text-muted mb-0 small">
+            Runs locally via <a href="https://ollama.com" target="_blank" rel="noopener">Ollama</a> — your
+            portfolio data never leaves this machine. Not financial advice.
+        </p>
+    </div>
+    {% if history %}
+    <form method="post" action="{% url 'assistant:clear_chat' %}">
+        {% csrf_token %}
+        <button class="btn btn-sm btn-outline-secondary" type="submit">Clear chat</button>
+    </form>
+    {% endif %}
+</div>
+
+<div class="card p-3 mb-3">
+    <div class="mb-2 small text-muted">Quick questions:</div>
+    <div class="d-flex flex-wrap gap-2">
+        {% for prompt in suggested_prompts %}
+            <button type="button" class="btn btn-sm btn-outline-primary suggested-prompt" data-prompt="{{ prompt }}">{{ prompt }}</button>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="card p-3 mb-3" style="min-height: 200px;">
+    {% if history %}
+        {% for turn in history %}
+            <div class="mb-3">
+                <div class="chat-bubble chat-user">{{ turn.question }}</div>
+                <div class="chat-bubble chat-assistant">{{ turn.answer|linebreaksbr }}</div>
+            </div>
+        {% endfor %}
+    {% else %}
+        <p class="text-muted mb-0">Ask something about your portfolio to get started — e.g. "Am I too concentrated in tech?"</p>
+    {% endif %}
+</div>
+
+<form method="post" class="card p-3">
+    {% csrf_token %}
+    <div class="input-group">
+        <textarea name="question" id="questionInput" class="form-control" rows="2" placeholder="Ask about your portfolio..." required></textarea>
+        <button class="btn btn-primary" type="submit">Ask</button>
+    </div>
+</form>
+
+<style>
+    .chat-bubble {
+        border-radius: 12px;
+        padding: 10px 14px;
+        margin-bottom: 6px;
+        max-width: 90%;
+    }
+    .chat-user {
+        background: rgba(79,142,247,0.12);
+        margin-left: auto;
+        text-align: right;
+    }
+    .chat-assistant {
+        background: rgba(148,163,184,0.12);
+    }
+    [data-bs-theme="dark"] .chat-user { background: rgba(79,142,247,0.18); }
+    [data-bs-theme="dark"] .chat-assistant { background: rgba(255,255,255,0.06); }
+</style>
+
+<script>
+    document.querySelectorAll(".suggested-prompt").forEach(function(btn) {
+        btn.addEventListener("click", function() {
+            const input = document.getElementById("questionInput");
+            input.value = btn.dataset.prompt;
+            input.form.submit();
+        });
+    });
+</script>
+
+{% endblock %}

@@ -19,7 +19,12 @@ SECRET_KEY = os.getenv('SECRET_KEY')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DEBUG') == 'True'
 
-ALLOWED_HOSTS = ["*"]
+def env_list(name, default):
+    return [v.strip() for v in os.getenv(name, default).split(",") if v.strip()]
+
+
+# Comma-separated, e.g. ALLOWED_HOSTS=localhost,127.0.0.1,finance.example.com
+ALLOWED_HOSTS = env_list("ALLOWED_HOSTS", "localhost,127.0.0.1")
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -30,6 +35,8 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "django.contrib.humanize",
     # Local apps
+    "accounts",
+    "assistant",
     "dashboard",
     "wallet",
     "watchlist",
@@ -42,6 +49,8 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    # Every view requires login unless decorated with @login_not_required.
+    "django.contrib.auth.middleware.LoginRequiredMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -59,13 +68,13 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+                "accounts.context_processors.signup_enabled",
             ],
         },
     },
 ]
 
 WSGI_APPLICATION = "financedash.wsgi.application"
-
 
 DATABASES = {
     "default": {
@@ -91,6 +100,14 @@ STATICFILES_DIRS = [BASE_DIR / "static"]
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+# --- Authentication ---
+LOGIN_URL = "login"
+LOGIN_REDIRECT_URL = "dashboard:home"
+LOGOUT_REDIRECT_URL = "login"
+# Set SIGNUP_ENABLED=False to stop new self-registrations (admins can still
+# create users from /admin/).
+SIGNUP_ENABLED = os.getenv("SIGNUP_ENABLED", "True") == "True"
+
 # --- App-specific settings ---
 
 # How long (seconds) to cache live price/news lookups from yfinance,
@@ -103,3 +120,11 @@ CACHES = {
         "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
     }
 }
+
+# --- Ollama (local LLM) settings ---
+# Requires Ollama (https://ollama.com) running locally, with the relevant
+# models pulled: `ollama pull llama3.1` and `ollama pull llava`.
+OLLAMA_BASE_URL = "http://localhost:11434"
+OLLAMA_CHAT_MODEL = "llama3.1"       # used for portfolio Q&A / analytics
+OLLAMA_VISION_MODEL = "llava"        # used for screenshot -> data extraction
+

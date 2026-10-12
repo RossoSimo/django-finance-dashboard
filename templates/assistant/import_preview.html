@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Review import - FinanceDash{% endblock %}
+{% block content %}
+
+<h3 class="mb-1">Review before importing</h3>
+<p class="text-muted">
+    Here's what the model read from your screenshot. Uncheck anything wrong,
+    fix values inline, then confirm.
+</p>
+
+<form method="post">
+    {% csrf_token %}
+    {{ holding_formset.management_form }}
+    {{ cash_formset.management_form }}
+
+    {% if holding_formset.forms %}
+    <div class="card p-3 mb-4">
+        <h5>Holdings</h5>
+        <table class="table table-sm align-middle">
+            <thead>
+                <tr>
+                    <th></th><th>Ticker</th><th>Name</th><th>Type</th>
+                    <th>Quantity</th><th>Avg cost</th><th>Currency</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for form in holding_formset %}
+                <tr>
+                    <td>{{ form.include }}</td>
+                    <td>{{ form.ticker }}</td>
+                    <td>{{ form.name }}</td>
+                    <td>{{ form.asset_type }}</td>
+                    <td>{{ form.quantity }}</td>
+                    <td>{{ form.avg_cost }}</td>
+                    <td>{{ form.currency }}</td>
+                </tr>
+                {% if form.errors %}
+                <tr><td colspan="7"><div class="text-danger small">{{ form.errors }}</div></td></tr>
+                {% endif %}
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    {% if cash_formset.forms %}
+    <div class="card p-3 mb-4">
+        <h5>Cash accounts</h5>
+        <table class="table table-sm align-middle">
+            <thead><tr><th></th><th>Name</th><th>Currency</th><th>Balance</th></tr></thead>
+            <tbody>
+            {% for form in cash_formset %}
+                <tr>
+                    <td>{{ form.include }}</td>
+                    <td>{{ form.name }}</td>
+                    <td>{{ form.currency }}</td>
+                    <td>{{ form.balance }}</td>
+                </tr>
+                {% if form.errors %}
+                <tr><td colspan="4"><div class="text-danger small">{{ form.errors }}</div></td></tr>
+                {% endif %}
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    <button type="submit" class="btn btn-success">Confirm &amp; import</button>
+    <a href="{% url 'assistant:import_upload' %}" class="btn btn-link">Start over</a>
+</form>
+
+{% endblock %}

@@ -19,7 +19,14 @@ def apply_transaction(tx: Transaction) -> None:
     Call this once, right after creating a Transaction, e.g.:
         tx = Transaction.objects.create(...)
         apply_transaction(tx)
+
+    Raises ValueError if the holding or cash account belongs to a different
+    user than the transaction.
     """
+    for related in (tx.holding, tx.cash_account):
+        if related is not None and related.user_id != tx.user_id:
+            raise ValueError("Transaction references another user's holding or cash account.")
+
     if tx.tx_type == "buy" and tx.holding:
         holding = tx.holding
         qty = tx.quantity or Decimal("0")
@@ -62,17 +69,17 @@ def apply_transaction(tx: Transaction) -> None:
         tx.cash_account.save()
 
 
-def net_worth_summary():
-    """Return a dict summarizing total liquidity, holdings value, and net worth.
+def net_worth_summary(user):
+    """Return a dict summarizing a user's total liquidity, holdings value, and net worth.
 
     Uses live prices where available; falls back to cost basis if a quote
     can't be fetched.
     """
     from common.market_data import get_quotes  # local import to avoid app-loading issues
 
-    cash_total = sum((a.balance for a in CashAccount.objects.all()), Decimal("0"))
+    cash_total = sum((a.balance for a in CashAccount.objects.filter(user=user)), Decimal("0"))
 
-    holdings = list(Holding.objects.filter(quantity__gt=0))
+    holdings = list(Holding.objects.filter(user=user, quantity__gt=0))
     quotes = get_quotes([h.ticker for h in holdings])
 
     holdings_value = Decimal("0")
@@ -106,14 +113,15 @@ def net_worth_summary():
     }
 
 
-def record_snapshot(summary: dict | None = None) -> NetWorthSnapshot:
-    """Upsert today's NetWorthSnapshot from the current net worth summary.
+def record_snapshot(user, summary: dict | None = None) -> NetWorthSnapshot:
+    """Upsert the user's NetWorthSnapshot for today from their net worth summary.
 
     Called from the dashboard view on every visit so the trend chart
     naturally fills in over time without needing a scheduled job.
     """
-    summary = summary or net_worth_summary()
+    summary = summary or net_worth_summary(user)
     snapshot, _created = NetWorthSnapshot.objects.update_or_create(
+        user=user,
         date=date_cls.today(),
         defaults={
             "cash_total": summary["cash_total"],

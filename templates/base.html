@@ -85,13 +85,26 @@
             <span class="navbar-toggler-icon"></span>
         </button>
         <div class="collapse navbar-collapse" id="nav">
+            {% if user.is_authenticated %}
             <ul class="navbar-nav me-auto">
                 <li class="nav-item"><a class="nav-link" href="{% url 'dashboard:home' %}">Dashboard</a></li>
                 <li class="nav-item"><a class="nav-link" href="{% url 'wallet:home' %}">Wallet</a></li>
                 <li class="nav-item"><a class="nav-link" href="{% url 'watchlist:home' %}">Watchlist</a></li>
                 <li class="nav-item"><a class="nav-link" href="{% url 'newsfeed:home' %}">News</a></li>
-                <li class="nav-item"><a class="nav-link" href="/admin/">Admin</a></li>
+                <li class="nav-item"><a class="nav-link" href="{% url 'assistant:chat' %}">🤖 Assistant</a></li>
+                <li class="nav-item"><a class="nav-link" href="{% url 'assistant:import_upload' %}">📸 Import</a></li>
+                {% if user.is_staff %}<li class="nav-item"><a class="nav-link" href="/admin/">Admin</a></li>{% endif %}
             </ul>
+            <div class="d-flex align-items-center gap-2 me-2">
+                <a class="nav-link text-light small" href="{% url 'password_change' %}" title="Change password">👤 {{ user.get_username }}</a>
+                <form method="post" action="{% url 'logout' %}" class="m-0">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-sm btn-outline-light">Log out</button>
+                </form>
+            </div>
+            {% else %}
+            <div class="me-auto"></div>
+            {% endif %}
             <button id="themeToggle" class="theme-toggle" type="button" title="Toggle dark mode" aria-label="Toggle dark mode">🌙</button>
         </div>
     </div>

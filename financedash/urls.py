@@ -7,4 +7,6 @@ urlpatterns = [
     path("wallet/", include("wallet.urls")),
     path("watchlist/", include("watchlist.urls")),
     path("news/", include("newsfeed.urls")),
+    path("assistant/", include("assistant.urls")),
+    path("accounts/", include("accounts.urls")),
 ]
