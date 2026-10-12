@@ -7,7 +7,7 @@
     <form method="post">
         {% csrf_token %}
         <button type="submit" class="btn btn-danger">Yes, remove</button>
-        <a href="{% url 'wallet:home' %}" class="btn btn-link">Cancel</a>
+        <a href="{% if cancel_url %}{{ cancel_url }}{% else %}{% url 'wallet:home' %}{% endif %}" class="btn btn-link">Cancel</a>
     </form>
 </div>
 {% endblock %}

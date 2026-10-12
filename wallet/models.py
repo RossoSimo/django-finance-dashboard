@@ -18,13 +18,25 @@ class CashAccount(models.Model):
     )
     name = models.CharField(max_length=100)
     currency = models.CharField(max_length=10, default="USD")
-    balance = models.DecimalField(max_digits=18, decimal_places=2, default=0)
+    opening_balance = models.DecimalField(max_digits=18, decimal_places=2, default=0)
+    allow_negative_balance = models.BooleanField(
+        default=False,
+        help_text="Allow this account to go below zero (overdraft, margin, credit card).",
+    )
+    # Derived: opening_balance plus every transaction. Maintained by
+    # wallet.services; never edit it directly.
+    balance = models.DecimalField(max_digits=18, decimal_places=2, default=0, editable=False)
 
     class Meta:
         ordering = ["name"]
 
     def __str__(self):
         return f"{self.name} ({self.currency})"
+
+    def save(self, *args, **kwargs):
+        if self._state.adding:  # no transactions yet
+            self.balance = self.opening_balance
+        super().save(*args, **kwargs)
 
 
 class Holding(models.Model):
@@ -36,8 +48,12 @@ class Holding(models.Model):
     ticker = models.CharField(max_length=20)
     name = models.CharField(max_length=200, blank=True)
     asset_type = models.CharField(max_length=10, choices=ASSET_TYPES, default="stock")
-    quantity = models.DecimalField(max_digits=18, decimal_places=6, default=0)
-    avg_cost = models.DecimalField(max_digits=18, decimal_places=6, default=0)
+    opening_quantity = models.DecimalField(max_digits=18, decimal_places=6, default=0)
+    opening_avg_cost = models.DecimalField(max_digits=18, decimal_places=6, default=0)
+    # Derived: the opening position plus every buy/sell. Maintained by
+    # wallet.services; never edit them directly.
+    quantity = models.DecimalField(max_digits=18, decimal_places=6, default=0, editable=False)
+    avg_cost = models.DecimalField(max_digits=18, decimal_places=6, default=0, editable=False)
     currency = models.CharField(max_length=10, default="USD")
     notes = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -50,6 +66,11 @@ class Holding(models.Model):
 
     def __str__(self):
         return self.ticker
+
+    def save(self, *args, **kwargs):
+        if self._state.adding:  # no transactions yet
+            self.quantity, self.avg_cost = self.opening_quantity, self.opening_avg_cost
+        super().save(*args, **kwargs)
 
     @property
     def cost_basis(self):
@@ -80,7 +101,11 @@ class NetWorthSnapshot(models.Model):
 
 
 class Transaction(models.Model):
-    """A single event: buying/selling a holding, or moving cash."""
+    """A single event: buying/selling a holding, or moving cash.
+
+    Transactions are the source of truth for balances and positions; create,
+    edit and delete them through wallet.services so derived values stay in sync.
+    """
 
     TX_TYPES = [
         ("buy", "Buy"),
@@ -95,10 +120,10 @@ class Transaction(models.Model):
     )
     tx_type = models.CharField(max_length=10, choices=TX_TYPES)
     holding = models.ForeignKey(
-        Holding, null=True, blank=True, on_delete=models.SET_NULL, related_name="transactions"
+        Holding, null=True, blank=True, on_delete=models.PROTECT, related_name="transactions"
     )
     cash_account = models.ForeignKey(
-        CashAccount, null=True, blank=True, on_delete=models.SET_NULL, related_name="transactions"
+        CashAccount, null=True, blank=True, on_delete=models.PROTECT, related_name="transactions"
     )
     quantity = models.DecimalField(max_digits=18, decimal_places=6, null=True, blank=True)
     price = models.DecimalField(max_digits=18, decimal_places=6, null=True, blank=True)

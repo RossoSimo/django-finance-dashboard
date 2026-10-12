@@ -98,7 +98,7 @@
             <tr>
                 <td>{{ tx.date }}</td>
                 <td>{{ tx.get_tx_type_display }}</td>
-                <td>{{ tx.holding.ticker|default:tx.cash_account.name|default:"—" }}</td>
+                <td>{% if tx.holding %}{{ tx.holding.ticker }}{% elif tx.cash_account %}{{ tx.cash_account.name }}{% else %}—{% endif %}</td>
                 <td>{{ tx.quantity|default:"—" }}</td>
                 <td>{{ tx.price|default:"—" }}</td>
                 <td>{{ tx.amount|default:"—" }}</td>

@@ -7,23 +7,30 @@
 </div>
 <div class="card p-3">
     {% if transactions %}
+    <p class="text-muted small">Editing or deleting a transaction recalculates the affected balances and positions.</p>
+    <div class="table-responsive">
     <table class="table table-sm mb-0">
-        <thead><tr><th>Date</th><th>Type</th><th>Target</th><th>Qty</th><th>Price</th><th>Amount</th><th>Fees</th><th>Notes</th></tr></thead>
+        <thead><tr><th>Date</th><th>Type</th><th>Target</th><th>Qty</th><th>Price</th><th>Amount</th><th>Fees</th><th>Notes</th><th><span class="visually-hidden">Actions</span></th></tr></thead>
         <tbody>
         {% for tx in transactions %}
             <tr>
                 <td>{{ tx.date }}</td>
                 <td>{{ tx.get_tx_type_display }}</td>
-                <td>{{ tx.holding.ticker|default:tx.cash_account.name|default:"—" }}</td>
+                <td>{% if tx.holding %}{{ tx.holding.ticker }}{% elif tx.cash_account %}{{ tx.cash_account.name }}{% else %}—{% endif %}</td>
                 <td>{{ tx.quantity|default:"—" }}</td>
                 <td>{{ tx.price|default:"—" }}</td>
                 <td>{{ tx.amount|default:"—" }}</td>
                 <td>{{ tx.fees|default:"—" }}</td>
                 <td>{{ tx.notes }}</td>
+                <td class="text-nowrap text-end">
+                    <a href="{% url 'wallet:edit_transaction' tx.pk %}" class="btn btn-sm btn-outline-secondary">Edit</a>
+                    <a href="{% url 'wallet:delete_transaction' tx.pk %}" class="btn btn-sm btn-outline-danger">Delete</a>
+                </td>
             </tr>
         {% endfor %}
         </tbody>
     </table>
+    </div>
     {% else %}
         <p class="text-muted mb-0">No transactions yet.</p>
     {% endif %}

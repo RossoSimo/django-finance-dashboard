@@ -1,7 +1,10 @@
 from django.contrib import messages
+from django.core.exceptions import ValidationError
+from django.db import transaction
 from django.shortcuts import redirect, render
 
 from wallet.models import CashAccount, Holding
+from wallet.services import set_cash_balance, set_position
 
 from .context import build_portfolio_context
 from .forms import (
@@ -82,42 +85,16 @@ def import_preview(request):
         cash_formset = CashImportFormSet(request.POST, prefix="cash")
 
         if holding_formset.is_valid() and cash_formset.is_valid():
-            imported = 0
-
-            for form in holding_formset:
-                cd = form.cleaned_data
-                if not cd or not cd.get("include") or not cd.get("ticker"):
-                    continue
-                Holding.objects.update_or_create(
-                    user=request.user,
-                    ticker=cd["ticker"],
-                    defaults={
-                        "name": cd.get("name", ""),
-                        "asset_type": cd["asset_type"],
-                        "quantity": cd.get("quantity") or 0,
-                        "avg_cost": cd.get("avg_cost") or 0,
-                        "currency": cd.get("currency") or "USD",
-                    },
-                )
-                imported += 1
-
-            for form in cash_formset:
-                cd = form.cleaned_data
-                if not cd or not cd.get("include") or not cd.get("name"):
-                    continue
-                CashAccount.objects.update_or_create(
-                    user=request.user,
-                    name=cd["name"],
-                    defaults={
-                        "currency": cd.get("currency") or "USD",
-                        "balance": cd.get("balance") or 0,
-                    },
-                )
-                imported += 1
-
-            request.session.pop("import_extracted", None)
-            messages.success(request, f"Imported {imported} item(s) from the screenshot.")
-            return redirect("wallet:home")
+            try:
+                with transaction.atomic():
+                    imported = _import_rows(request.user, holding_formset, cash_formset)
+            except ValidationError as exc:
+                # Nothing was saved; let the user fix or untick the row.
+                messages.error(request, f"Nothing was imported: {' '.join(exc.messages)}")
+            else:
+                request.session.pop("import_extracted", None)
+                messages.success(request, f"Imported {imported} item(s) from the screenshot.")
+                return redirect("wallet:home")
     else:
         holding_formset = HoldingImportFormSet(
             initial=holding_initial_from_extracted(extracted.get("holdings")), prefix="holdings"
@@ -130,3 +107,44 @@ def import_preview(request):
         "holding_formset": holding_formset,
         "cash_formset": cash_formset,
     })
+
+
+def _import_rows(user, holding_formset, cash_formset) -> int:
+    """Save reviewed screenshot rows. Existing holdings/accounts are set to the
+    imported position/balance by adjusting their opening values, so their
+    transaction history is preserved."""
+    imported = 0
+
+    for form in holding_formset:
+        cd = form.cleaned_data
+        if not cd or not cd.get("include") or not cd.get("ticker"):
+            continue
+        holding, _ = Holding.objects.update_or_create(
+            user=user,
+            ticker=cd["ticker"],
+            defaults={
+                "name": cd.get("name", ""),
+                "asset_type": cd["asset_type"],
+                "currency": cd.get("currency") or "USD",
+            },
+        )
+        set_position(holding, cd.get("quantity") or 0, cd.get("avg_cost") or 0)
+        imported += 1
+
+    for form in cash_formset:
+        cd = form.cleaned_data
+        if not cd or not cd.get("include") or not cd.get("name"):
+            continue
+        account, _ = CashAccount.objects.update_or_create(
+            user=user,
+            name=cd["name"],
+            defaults={"currency": cd.get("currency") or "USD"},
+        )
+        balance = cd.get("balance") or 0
+        if balance < 0:
+            # A reviewed negative balance (margin, credit card) is real; allow it.
+            account.allow_negative_balance = True
+        set_cash_balance(account, balance)
+        imported += 1
+
+    return imported
