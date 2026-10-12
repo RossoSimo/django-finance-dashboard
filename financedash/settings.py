@@ -42,6 +42,7 @@ INSTALLED_APPS = [
     "wallet",
     "watchlist",
     "newsfeed",
+    "performance",
 ]
 
 MIDDLEWARE = [
@@ -122,6 +123,8 @@ SIGNUP_ENABLED = os.getenv("SIGNUP_ENABLED", "True") == "True"
 MARKET_DATA_CACHE_SECONDS = 60
 # Exchange rates move slowly enough for a personal dashboard.
 FX_CACHE_SECONDS = 900
+# Daily closes for the performance charts.
+PRICE_HISTORY_CACHE_SECONDS = 3600
 # Base currency for new users (each user can change theirs in Settings).
 DEFAULT_BASE_CURRENCY = os.getenv("DEFAULT_BASE_CURRENCY", "EUR")
 NEWS_CACHE_SECONDS = 300

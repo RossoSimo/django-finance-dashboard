@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+{% block title %}Performance - FinanceDash{% endblock %}
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <h3 class="mb-0">Performance</h3>
+    {% include "performance/_ranges.html" %}
+</div>
+
+{% if history.missing_currencies %}
+<div class="alert alert-warning" role="alert">
+    ⚠️ No exchange rate for {{ history.missing_currencies|join:", " }} &rarr; {{ history.base_currency }}; those amounts are left out.
+</div>
+{% endif %}
+{% if history.missing_prices %}
+<div class="alert alert-info" role="status">
+    No price history for {{ history.missing_prices|join:", " }}; valued at average cost instead.
+</div>
+{% endif %}
+
+{% if has_data %}
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <div class="card p-3 h-100">
+            <div class="text-muted small">Net worth {{ history.start|date:"j M Y" }} &rarr; today</div>
+            <div class="fs-4 fw-bold">{{ history.net_worth|last|floatformat:2 }} {{ history.base_currency }}</div>
+            <div class="{% if history.change > 0 %}positive{% elif history.change < 0 %}negative{% endif %}">
+                {% if history.change > 0 %}▲ +{% elif history.change < 0 %}▼ {% endif %}{{ history.change|floatformat:2 }}{% if history.change_pct is not None %} ({{ history.change_pct|floatformat:1 }}%){% endif %}
+            </div>
+            <div class="small text-muted">Includes deposits and withdrawals.</div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card p-3 h-100">
+            <div class="text-muted small">Holdings value vs invested</div>
+            <div class="fs-4 fw-bold">{{ history.holdings_value|last|floatformat:2 }} {{ history.base_currency }}</div>
+            <div class="small">Invested {{ history.invested|last|floatformat:2 }} {{ history.base_currency }}</div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card p-3 h-100">
+            <div class="text-muted small">Unrealized gain/loss</div>
+            <div class="fs-4 fw-bold {% if history.unrealized_gain > 0 %}positive{% elif history.unrealized_gain < 0 %}negative{% endif %}">
+                {% if history.unrealized_gain > 0 %}+{% endif %}{{ history.unrealized_gain|floatformat:2 }} {{ history.base_currency }}
+            </div>
+            <div class="small text-muted">Current holdings, value minus cost.</div>
+        </div>
+    </div>
+</div>
+
+<div class="card p-3 mb-4">
+    <h5>Value over time ({{ history.base_currency }})</h5>
+    <canvas id="portfolioChart" height="110" role="img"
+            aria-label="Line chart from {{ history.start|date:'j M Y' }} to today: net worth {{ history.net_worth|first|floatformat:2 }} to {{ history.net_worth|last|floatformat:2 }} {{ history.base_currency }}; holdings value and amount invested also shown."></canvas>
+    <p class="small text-muted mt-2 mb-0">
+        Rebuilt from your transactions and daily closing prices. Opening quantities and balances count as held from the start of the chart.
+        Amounts are converted with each day's exchange rate.
+    </p>
+</div>
+
+<div class="card p-3">
+    <h5>Holdings</h5>
+    {% if history.holdings %}
+    <div class="table-responsive">
+    <table class="table table-sm align-middle mb-0">
+        <thead><tr><th>Ticker</th><th>Price change</th><th>Value now ({{ history.base_currency }})</th><th>Gain/Loss ({{ history.base_currency }})</th><th><span class="visually-hidden">Details</span></th></tr></thead>
+        <tbody>
+        {% for p in history.holdings %}
+            <tr>
+                <td><strong>{{ p.holding.ticker }}</strong></td>
+                <td>{% if p.price_change_pct is not None %}<span class="{% if p.price_change_pct > 0 %}positive{% elif p.price_change_pct < 0 %}negative{% endif %}">{% if p.price_change_pct > 0 %}▲ +{% elif p.price_change_pct < 0 %}▼ {% endif %}{{ p.price_change_pct|floatformat:1 }}%</span>{% else %}—{% endif %}</td>
+                <td>{% if p.end_value is not None %}{{ p.end_value|floatformat:2 }}{% else %}—{% endif %}</td>
+                <td>{% if p.gain is not None %}<span class="{% if p.gain > 0 %}positive{% elif p.gain < 0 %}negative{% endif %}">{% if p.gain > 0 %}+{% endif %}{{ p.gain|floatformat:2 }}</span>{% else %}—{% endif %}</td>
+                <td class="text-end"><a href="{% url 'performance:holding' p.holding.pk %}?range={{ range_key }}" class="btn btn-sm btn-outline-secondary">Chart</a></td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+    {% else %}
+        <p class="text-muted mb-0">No holdings in this period.</p>
+    {% endif %}
+</div>
+
+{{ chart|json_script:"portfolio-data" }}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script>
+(function() {
+    const data = JSON.parse(document.getElementById("portfolio-data").textContent);
+    const isDark = document.documentElement.getAttribute("data-bs-theme") === "dark";
+    const gridColor = isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.05)";
+    const tickColor = isDark ? "#9ca3af" : "#6c757d";
+    const fmt = (v) => v === null ? "—" : v.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) + " " + data.currency;
+    new Chart(document.getElementById("portfolioChart"), {
+        type: "line",
+        data: {
+            labels: data.labels,
+            datasets: [
+                {label: "Net worth", data: data.net_worth, borderColor: "#8b5cf6", backgroundColor: "rgba(139,92,246,0.10)", fill: true, tension: 0.2, pointRadius: 0, borderWidth: 2},
+                {label: "Holdings value", data: data.holdings_value, borderColor: "#4f8ef7", tension: 0.2, pointRadius: 0, borderWidth: 2},
+                {label: "Invested", data: data.invested, borderColor: "#94a3b8", borderDash: [6, 4], stepped: true, pointRadius: 0, borderWidth: 2},
+            ]
+        },
+        options: {
+            interaction: {mode: "index", intersect: false},
+            plugins: {tooltip: {callbacks: {label: (ctx) => ctx.dataset.label + ": " + fmt(ctx.parsed.y)}}},
+            scales: {
+                x: {grid: {display: false}, ticks: {color: tickColor, maxTicksLimit: 8}},
+                y: {grid: {color: gridColor}, ticks: {color: tickColor}},
+            },
+        }
+    });
+})();
+</script>
+{% else %}
+<div class="card p-4">
+    <p class="mb-0 text-muted">Nothing to chart yet. Add cash accounts, holdings or transactions in the <a href="{% url 'wallet:home' %}">Wallet</a>.</p>
+</div>
+{% endif %}
+{% endblock %}

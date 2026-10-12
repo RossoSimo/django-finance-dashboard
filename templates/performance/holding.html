@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}{{ holding.ticker }} performance - FinanceDash{% endblock %}
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <div>
+        <a href="{% url 'performance:portfolio' %}?range={{ range_key }}" class="small">&larr; Performance</a>
+        <h3 class="mb-0">{{ holding.ticker }}{% if holding.name %} <span class="fs-6 text-muted">{{ holding.name }}</span>{% endif %}</h3>
+    </div>
+    {% include "performance/_ranges.html" %}
+</div>
+
+<div class="card p-3 mb-4">
+    <h5>Price ({{ history.price_currency }})</h5>
+    {% if has_prices %}
+    <canvas id="holdingChart" height="110" role="img"
+            aria-label="Price of {{ holding.ticker }} over the selected range{% if chart.avg_cost %} with your average cost{% endif %}; {{ history.trades|length }} buy/sell transaction(s) marked."></canvas>
+    {% if not history.avg_cost_comparable %}
+        <p class="small text-muted mt-2 mb-0">Your average cost is in {{ holding.currency }} and the price in {{ history.price_currency }}, so the cost line isn't drawn.</p>
+    {% endif %}
+    {% else %}
+        <p class="text-muted mb-0">No price history available for {{ holding.ticker }}.</p>
+    {% endif %}
+</div>
+
+<div class="card p-3">
+    <h5>Buys and sells in this period</h5>
+    {% if history.trades %}
+    <div class="table-responsive">
+    <table class="table table-sm mb-0">
+        <thead><tr><th>Date</th><th>Type</th><th>Quantity</th><th>Price</th><th>Fees</th></tr></thead>
+        <tbody>
+        {% for t in history.trades %}
+            <tr><td>{{ t.date }}</td><td>{{ t.get_tx_type_display }}</td><td>{{ t.quantity|floatformat:"-6" }}</td><td>{{ t.price|floatformat:"-4" }}</td><td>{{ t.fees|floatformat:2 }}</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+    {% else %}
+        <p class="text-muted mb-0">None.</p>
+    {% endif %}
+</div>
+
+{% if has_prices %}
+{{ chart|json_script:"holding-data" }}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script>
+(function() {
+    const data = JSON.parse(document.getElementById("holding-data").textContent);
+    const isDark = document.documentElement.getAttribute("data-bs-theme") === "dark";
+    const gridColor = isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.05)";
+    const tickColor = isDark ? "#9ca3af" : "#6c757d";
+    const datasets = [
+        {type: "line", label: "Price", data: data.price, borderColor: "#4f8ef7", tension: 0.2, pointRadius: 0, borderWidth: 2, spanGaps: true},
+    ];
+    if (data.avg_cost.length) {
+        datasets.push({type: "line", label: "Your average cost", data: data.avg_cost, borderColor: "#94a3b8", borderDash: [6, 4], stepped: true, pointRadius: 0, borderWidth: 2});
+    }
+    for (const [kind, colour, shape] of [["buy", "#22c55e", "triangle"], ["sell", "#ef4444", "rectRot"]]) {
+        const points = data.trades.filter((t) => t.type === kind);
+        if (points.length) {
+            datasets.push({type: "scatter", label: kind === "buy" ? "Buy" : "Sell", data: points, backgroundColor: colour,
+                           pointStyle: shape, pointRadius: 7, quantities: points.map((p) => p.quantity)});
+        }
+    }
+    new Chart(document.getElementById("holdingChart"), {
+        data: {labels: data.labels, datasets},
+        options: {
+            plugins: {tooltip: {callbacks: {label: (ctx) => {
+                const v = ctx.parsed.y === null ? "—" : ctx.parsed.y.toLocaleString(undefined, {maximumFractionDigits: 4}) + " " + data.currency;
+                return ctx.dataset.type === "scatter" ? `${ctx.dataset.label} ${ctx.raw.quantity} @ ${v}` : `${ctx.dataset.label}: ${v}`;
+            }}}},
+            scales: {
+                x: {type: "category", grid: {display: false}, ticks: {color: tickColor, maxTicksLimit: 8}},
+                y: {grid: {color: gridColor}, ticks: {color: tickColor}},
+            },
+        }
+    });
+})();
+</script>
+{% endif %}
+{% endblock %}

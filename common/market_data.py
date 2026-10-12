@@ -199,3 +199,32 @@ def get_fx_rate(from_currency: str, to_currency: str) -> float | None:
         cache.set(cache_key, float(rate), settings.FX_CACHE_SECONDS)
         return float(rate)
     return None
+
+
+def get_price_history(symbol: str, start) -> list[tuple]:
+    """Daily closes since `start` (a date) as [(date, float), ...], oldest
+    first. Works for tickers and FX pairs ("USDEUR=X"). Prices are in the
+    instrument's quote currency (split-adjusted, not dividend-adjusted).
+    Cached; returns [] if the data can't be fetched."""
+    symbol = (symbol or "").upper()
+    if not symbol:
+        return []
+    cache_key = f"history:{symbol}:{start.isoformat()}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+    if yf is None:
+        return []
+
+    series: list[tuple] = []
+    try:
+        frame = yf.Ticker(symbol).history(start=start.isoformat(), interval="1d", auto_adjust=False)
+        for stamp, close in frame["Close"].items():
+            if close == close and close is not None:  # skip NaN
+                series.append((stamp.date(), float(close)))
+    except Exception:
+        logger.exception("Failed to fetch price history for %s", symbol)
+        return []  # don't cache failures; retry on the next request
+
+    cache.set(cache_key, series, settings.PRICE_HISTORY_CACHE_SECONDS)
+    return series

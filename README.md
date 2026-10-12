@@ -127,5 +127,11 @@ templates/         All HTML templates (Bootstrap 5 via CDN)
   the dashboard, watchlist or alerts page (at most once a minute). To check
   on a schedule instead, run `python manage.py check_alerts` from Windows
   Task Scheduler or cron.
-- Ideas for later: email alerts, charts (e.g. with Chart.js) for portfolio
+- **Performance**: net worth, holdings value and amount invested over
+  1M/3M/6M/YTD/1Y/Max, rebuilt from your transactions and Yahoo daily
+  closes (cached 1 h) with each day's FX rate; per-holding price charts with
+  your average cost and buy/sell markers (click a ticker in the Wallet).
+  Opening quantities/balances count as held from the start of the chart;
+  stock splits aren't adjusted for.
+- Ideas for later: email alerts, tags/categories per holding (e.g. with Chart.js) for portfolio
   performance over time, tags/categories per holding.

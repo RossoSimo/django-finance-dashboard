@@ -64,7 +64,7 @@
         <tbody>
         {% for row in summary.rows %}
             <tr>
-                <td><strong>{{ row.holding.ticker }}</strong></td>
+                <td><a href="{% url 'performance:holding' row.holding.pk %}" title="Price chart"><strong>{{ row.holding.ticker }}</strong></a></td>
                 <td>{{ row.holding.get_asset_type_display }}</td>
                 <td>{{ row.holding.quantity }}</td>
                 <td>{{ row.holding.avg_cost|floatformat:2 }} {{ row.holding.currency }}</td>

@@ -1,0 +1,5 @@
+<nav aria-label="Time range" class="btn-group btn-group-sm flex-wrap" role="group">
+    {% for r in ranges %}
+        <a href="?range={{ r.key }}" class="btn {% if r.active %}btn-primary{% else %}btn-outline-primary{% endif %}"{% if r.active %} aria-current="page"{% endif %}>{{ r.label }}</a>
+    {% endfor %}
+</nav>
