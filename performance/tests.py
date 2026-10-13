@@ -353,6 +353,17 @@ class IntradayPortfolioTests(TestCase):
         self.assertEqual(h.holdings_value, [D("198.0"), D("202.0")])  # last Friday bucket at the live quote
         self.assertEqual(h.end, date(2026, 10, 9))
 
+    def test_1d_before_first_bar_uses_previous_close_not_same_day(self):
+        self.hold("BTC-EUR", "1")
+        self.hold("ETH-EUR", "1")
+        h = self.history({"BTC-EUR": [(utc(11, 8), 100.0), (utc(11, 10), 100.0)],
+                          "ETH-EUR": [(utc(11, 10), 30.0)]},
+                         closes={"ETH-EUR": [(date(2026, 10, 10), 20.0),
+                                             (date(2026, 10, 11), 29.0)]})  # today's partial daily row
+        self.assertEqual(h.days, [utc(11, 8), utc(11, 10), NOW])
+        # 08:00: ETH has no bar yet -> Saturday's close (20), not today's row (29)
+        self.assertEqual(h.holdings_value, [D("120.0"), D("130.0"), D("130.0")])
+
     def test_7d_fund_without_bars_steps_with_daily_closes(self):
         self.hold("AAPL", "1")
         self.hold("FUND", "2")

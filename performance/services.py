@@ -11,7 +11,8 @@ bucketed to 5 minutes (1D) or 1 hour (7D) in UTC and merged across holdings.
 1D shows the latest session (local date of the newest bar of anything held);
 7D the last 7 days. Each holding's price is carried forward from its last bar
 at or before a point; without one (e.g. funds, which have no intraday bars)
-it is the last daily close on or before the point's local date. Positions and
+it is the last daily close strictly before the point's local date (a
+same-day daily row is partial, so using it would look ahead). Positions and
 cash follow the ledger up to the point's local date (transactions carry
 dates, not times). Every point uses the current FX rate. The grid ends at
 `now`, except for a 1D session that isn't today's (e.g. at the weekend): that
@@ -394,8 +395,8 @@ def _grid(window: _Window, bar_lists) -> list[datetime]:
 
 class _IntradayPrices:
     """Bar closes carried forward on bucketed times; where there's no bar
-    yet (or none at all, e.g. funds), the last daily close on or before the
-    point's local date."""
+    yet (or none at all, e.g. funds), the last daily close strictly before the
+    point's local date: a same-day daily row is partial, close to the live price."""
 
     def __init__(self, bars, closes, minutes, raw_currency):
         by_bucket = {}
@@ -409,7 +410,7 @@ class _IntradayPrices:
 
     def at(self, moment):
         price = self.bars.at(moment)
-        return price if price is not None else self.closes.at(_local_date(moment))
+        return price if price is not None else self.closes.at(_local_date(moment) - ONE_DAY)
 
 
 def _intraday_prices(bars, history_fn, ticker, window, raw_currency):
