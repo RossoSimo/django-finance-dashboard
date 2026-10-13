@@ -1,10 +1,11 @@
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from unittest import mock
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from accounts.models import get_profile
 from common.currency import CurrencyConverter
@@ -12,7 +13,17 @@ from common.market_data import Quote
 from wallet.models import CashAccount, Holding, Transaction
 from wallet.services import save_transaction
 
-from .services import RANGES, holding_history, portfolio_history, range_start, sample_days
+from .services import (
+    RANGES,
+    HoldingHistory,
+    history_for_range,
+    holding_history,
+    holding_history_intraday,
+    portfolio_history,
+    portfolio_history_intraday,
+    range_start,
+    sample_days,
+)
 
 D = Decimal
 User = get_user_model()
@@ -25,14 +36,27 @@ def day(n):
     return MON + timedelta(days=n)
 
 
-def quote(ticker, currency="USD"):
-    return Quote(ticker=ticker, name=None, price=1.0, previous_close=None,
+def quote(ticker, currency="USD", price=1.0):
+    return Quote(ticker=ticker, name=None, price=price, previous_close=None,
                  currency=currency, change=None, change_pct=None)
 
 
 def fake_history(series):
     """history_fn returning fixed closes per symbol (ignores `start`)."""
     return lambda symbol, start: series.get(symbol.upper(), [])
+
+
+def fake_intraday(series):
+    """intraday_fn returning fixed bars per symbol (ignores the range key)."""
+    return lambda symbol, key: series.get(symbol.upper(), [])
+
+
+def utc(month_day, hour, minute=0):
+    """An aware UTC datetime in October 2026."""
+    return datetime(2026, 10, month_day, hour, minute, tzinfo=UTC)
+
+
+NOW = utc(11, 12)  # Sunday 11 Oct 2026, 14:00 in Rome
 
 
 def no_current_rates(from_ccy, to_ccy):
@@ -77,10 +101,10 @@ class PortfolioHistoryTests(TestCase):
         kwargs.setdefault("user", self.user)
         return save_transaction(Transaction(**kwargs))
 
-    def history(self, series, quotes=None, rates=no_current_rates, start=day(0), end=day(6)):
+    def history(self, series, quotes=None, rates=no_current_rates, start=day(0), end=day(6), today=day(30)):
         return portfolio_history(self.user, start, end, history_fn=fake_history(series),
                                  quotes=quotes if quotes is not None else {"AAPL": quote("AAPL", "EUR")},
-                                 converter=CurrencyConverter("EUR", rates))
+                                 converter=CurrencyConverter("EUR", rates), today=today)
 
     def test_position_and_cash_follow_the_transactions(self):
         self.record(tx_type="buy", holding=self.aapl, cash_account=self.broker,
@@ -170,6 +194,174 @@ class PortfolioHistoryTests(TestCase):
         self.assertEqual(h.holdings, [])
 
 
+class LiveLastPointTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user("alice")
+        profile = get_profile(self.user)
+        profile.base_currency = "EUR"
+        profile.save()
+        self.aapl = Holding.objects.create(user=self.user, ticker="AAPL", currency="EUR",
+                                           opening_quantity=D("2"), opening_avg_cost=D("5"))
+
+    def history(self, series, quotes, today, rates=no_current_rates):
+        return portfolio_history(self.user, day(0), day(6), history_fn=fake_history(series), quotes=quotes,
+                                 converter=CurrencyConverter("EUR", rates), today=today)
+
+    def test_live_last_point_uses_quote(self):
+        h = self.history({"AAPL": [(day(0), 10.0)]}, {"AAPL": quote("AAPL", "EUR", price=12.0)}, today=day(6))
+        self.assertEqual(h.holdings_value[:-1], [D("20.0")] * 6)
+        self.assertEqual(h.holdings_value[-1], D("24.0"))
+        self.assertEqual(h.holdings[0].last_price, D("12.0"))
+        self.assertEqual(h.holdings[0].end_value, D("24.0"))
+
+    def test_live_quote_ignored_when_range_ends_in_past(self):
+        h = self.history({"AAPL": [(day(0), 10.0)]}, {"AAPL": quote("AAPL", "EUR", price=12.0)}, today=day(7))
+        self.assertEqual(h.holdings_value[-1], D("20.0"))
+        self.assertEqual(h.holdings[0].last_price, D("10.0"))
+
+    def test_holding_without_live_price_keeps_its_close(self):
+        h = self.history({"AAPL": [(day(0), 10.0)]}, {"AAPL": quote("AAPL", "EUR", price=None)}, today=day(6))
+        self.assertEqual(h.holdings_value[-1], D("20.0"))
+        self.assertEqual(h.holdings[0].last_price, D("10.0"))
+
+    def test_live_last_point_normalises_pence(self):
+        self.aapl.delete()
+        Holding.objects.create(user=self.user, ticker="VOD.L", currency="GBP",
+                               opening_quantity=D("2"), opening_avg_cost=D("10"))
+        h = self.history({"VOD.L": [(day(0), 1000.0)], "GBPEUR=X": [(day(0), 1.1)]},
+                         {"VOD.L": quote("VOD.L", "GBp", price=1250.0)}, today=day(6),
+                         rates=lambda f, t: 1.2)
+        self.assertEqual(h.holdings_value[0], D("22.0"))  # 2 * 10.00 GBP * 1.1 (FX history)
+        self.assertEqual(h.holdings_value[-1], D("30.0"))  # 2 * 12.50 GBP * 1.2 (current rate)
+        self.assertEqual(h.holdings[0].last_price, D("12.5"))
+
+    def test_live_point_without_current_rate_is_excluded_and_reported(self):
+        CashAccount.objects.create(user=self.user, name="USD", currency="USD", opening_balance=D("10"))
+        h = self.history({"AAPL": [(day(0), 10.0)], "USDEUR=X": [(day(0), 0.5)]}, {}, today=day(6))
+        self.assertEqual(h.cash[0], D("5.0"))  # history rate
+        self.assertEqual(h.cash[-1], D("0"))  # no current rate: left out, not counted 1:1
+        self.assertEqual(h.missing_currencies, ["USD"])
+
+
+class IntradayPortfolioTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user("alice")
+        profile = get_profile(self.user)
+        profile.base_currency = "EUR"
+        profile.save()
+
+    def hold(self, ticker, qty, currency="EUR", avg="1"):
+        return Holding.objects.create(user=self.user, ticker=ticker, currency=currency,
+                                      opening_quantity=D(qty), opening_avg_cost=D(avg))
+
+    def history(self, bars, closes=None, key="1d", quotes=None, rates=no_current_rates):
+        return portfolio_history_intraday(self.user, key, intraday_fn=fake_intraday(bars),
+                                          history_fn=fake_history(closes or {}), quotes=quotes or {},
+                                          converter=CurrencyConverter("EUR", rates), now=NOW)
+
+    def test_grid_aligns_and_forward_fills_two_holdings(self):
+        self.hold("AAPL", "1")
+        self.hold("MSFT", "1")
+        h = self.history({"AAPL": [(utc(9, 13, 30), 100.0), (utc(9, 13, 40), 102.0)],
+                          "MSFT": [(utc(9, 13, 35), 50.0)]},
+                         closes={"MSFT": [(date(2026, 10, 8), 49.0)]})
+        self.assertTrue(h.intraday)
+        self.assertEqual(h.session_date, date(2026, 10, 9))
+        self.assertEqual(h.days, [utc(9, 13, 30), utc(9, 13, 35), utc(9, 13, 40), NOW])
+        # 13:30: MSFT has no bar yet -> previous close; 13:35: AAPL carries its 13:30 price
+        self.assertEqual(h.holdings_value, [D("149.0"), D("150.0"), D("152.0"), D("152.0")])
+        self.assertEqual(h.missing_prices, [])
+
+    def test_bars_are_bucketed(self):
+        self.hold("AAPL", "1")
+        h = self.history({"AAPL": [(utc(9, 13, 31), 100.0), (utc(9, 13, 33), 101.0)]})
+        self.assertEqual(h.days, [utc(9, 13, 30), NOW])
+        self.assertEqual(h.holdings_value[0], D("101.0"))  # last bar in the bucket wins
+
+    def test_intraday_holding_without_bars_is_flat_at_last_close(self):
+        self.hold("FUND", "3")
+        h = self.history({}, closes={"FUND": [(date(2026, 10, 9), 48.0), (date(2026, 10, 10), 50.0),
+                                              (date(2026, 10, 11), 99.0)]})  # a same-day close isn't "before"
+        self.assertEqual(h.session_date, date(2026, 10, 11))
+        self.assertGreaterEqual(len(h.days), 2)
+        self.assertTrue(all(v == D("150.0") for v in h.holdings_value))
+        self.assertEqual(h.missing_prices, [])
+
+    def test_1d_uses_latest_session_and_holds_older_sessions_flat(self):
+        self.hold("BTC-EUR", "2")
+        self.hold("AAPL", "1")
+        h = self.history({"BTC-EUR": [(utc(11, 8, 0), 60000.0), (utc(11, 8, 5), 60100.0)],
+                          "AAPL": [(utc(9, 19, 50), 99.0), (utc(9, 19, 55), 100.0)]},
+                         closes={"AAPL": [(date(2026, 10, 8), 95.0)]})
+        self.assertEqual(h.session_date, date(2026, 10, 11))
+        self.assertEqual(h.days, [utc(11, 8, 0), utc(11, 8, 5), NOW])
+        self.assertEqual(h.holdings_value, [D("120100.0"), D("120300.0"), D("120300.0")])
+
+    def test_7d_keeps_the_week_with_hourly_buckets(self):
+        self.hold("AAPL", "1")
+        h = self.history({"AAPL": [(utc(3, 14, 30), 90.0), (utc(5, 14, 30), 95.0), (utc(9, 19, 30), 100.0)]},
+                         key="7d")
+        self.assertIsNone(h.session_date)
+        self.assertEqual(h.days, [utc(5, 14), utc(9, 19), NOW])  # 3 Oct is before now - 7 days
+        self.assertEqual(h.holdings_value, [D("95.0"), D("100.0"), D("100.0")])
+
+    def test_intraday_cash_only_portfolio_has_points(self):
+        CashAccount.objects.create(user=self.user, name="Bank", currency="EUR", opening_balance=D("1000"))
+        h = self.history({})
+        self.assertGreaterEqual(len(h.days), 2)
+        self.assertEqual(h.days[-1], NOW)
+        self.assertTrue(all(v == D("1000") for v in h.net_worth))
+
+    def test_cash_follows_the_ledger_by_local_date(self):
+        bank = CashAccount.objects.create(user=self.user, name="Bank", currency="EUR", opening_balance=D("1000"))
+        save_transaction(Transaction(user=self.user, tx_type="withdraw", cash_account=bank, amount=D("100"),
+                                     date=date(2026, 10, 7)))
+        h = self.history({}, key="7d")
+        self.assertEqual(h.cash, [D("1000"), D("900")])  # window start (4 Oct), now
+
+    def test_intraday_missing_fx_is_excluded_and_reported(self):
+        self.hold("AAPL", "1", currency="USD")
+        h = self.history({"AAPL": [(utc(9, 13, 30), 100.0)]}, quotes={"AAPL": quote("AAPL", "USD", price=None)})
+        self.assertTrue(all(v == 0 for v in h.holdings_value))
+        self.assertEqual(h.missing_currencies, ["USD"])
+
+    def test_intraday_uses_current_rate(self):
+        self.hold("AAPL", "1", currency="USD")
+        h = self.history({"AAPL": [(utc(9, 13, 30), 100.0)]}, quotes={"AAPL": quote("AAPL", "USD", price=None)},
+                         rates=lambda f, t: 0.9)
+        self.assertEqual(h.holdings_value, [D("90.0"), D("90.0")])
+
+    def test_intraday_last_point_is_live(self):
+        self.hold("AAPL", "2")
+        h = self.history({"AAPL": [(utc(9, 13, 30), 100.0)]}, quotes={"AAPL": quote("AAPL", "EUR", price=110.0)})
+        self.assertEqual(h.holdings_value, [D("200.0"), D("220.0")])
+        self.assertEqual(h.holdings[0].last_price, D("110.0"))
+
+    def test_no_price_at_all_is_valued_at_cost_and_reported(self):
+        self.hold("AAPL", "2", avg="40")
+        h = self.history({})
+        self.assertEqual(h.missing_prices, ["AAPL"])
+        self.assertTrue(all(v == D("80") for v in h.holdings_value))
+
+    def test_holding_not_held_in_the_window_is_left_out(self):
+        aapl = self.hold("AAPL", "0")
+        save_transaction(Transaction(user=self.user, tx_type="buy", holding=aapl, quantity=D("1"),
+                                     price=D("1"), date=date(2026, 9, 1)))
+        save_transaction(Transaction(user=self.user, tx_type="sell", holding=aapl, quantity=D("1"),
+                                     price=D("1"), date=date(2026, 9, 2)))
+        h = self.history({"AAPL": [(utc(9, 13, 30), 100.0)]})
+        self.assertEqual(h.holdings, [])
+        self.assertEqual(h.session_date, date(2026, 10, 11))  # AAPL's Friday session doesn't count
+        self.assertEqual(h.days, [utc(10, 22), NOW])  # no bars: local midnight (UTC+2) to now
+
+    def test_only_the_users_own_data(self):
+        bob = User.objects.create_user("bob")
+        Holding.objects.create(user=bob, ticker="AAPL", currency="EUR", opening_quantity=D("100"))
+        h = self.history({"AAPL": [(utc(9, 13, 30), 100.0)]})
+        self.assertEqual(h.holdings, [])
+        self.assertTrue(all(v == 0 for v in h.net_worth))
+
+
 class HoldingHistoryTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user("alice")
@@ -190,9 +382,90 @@ class HoldingHistoryTests(TestCase):
         self.assertEqual(len(h.trades), 2)  # only those inside the range
         self.assertTrue(h.avg_cost_comparable)
 
+    def test_live_last_price(self):
+        self.aapl.opening_quantity = D("1")
+        self.aapl.save()
+        hist = fake_history({"AAPL": [(day(0), 50.0)]})
+        h = holding_history(self.aapl, day(0), day(2), history_fn=hist, quote=quote("AAPL", "USD", 55.0),
+                            today=day(2))
+        self.assertEqual(h.price, [D("50.0"), D("50.0"), D("55.0")])
+        h = holding_history(self.aapl, day(0), day(2), history_fn=hist, quote=quote("AAPL", "USD", 55.0),
+                            today=day(3))
+        self.assertEqual(h.price[-1], D("50.0"))
+
+    def test_holding_intraday_trades_in_window(self):
+        save_transaction(Transaction(user=self.user, tx_type="buy", holding=self.aapl, quantity=D("1"),
+                                     price=D("90"), date=date(2026, 10, 1)))  # before the 7-day window
+        save_transaction(Transaction(user=self.user, tx_type="buy", holding=self.aapl, quantity=D("1"),
+                                     price=D("110"), date=date(2026, 10, 8)))
+        h = holding_history_intraday(
+            self.aapl, "7d", now=NOW, quote=quote("AAPL", "USD", 120.0),
+            intraday_fn=fake_intraday({"AAPL": [(utc(6, 14, 30), 100.0), (utc(9, 19, 30), 105.0)]}),
+            history_fn=fake_history({}))
+        self.assertTrue(h.intraday)
+        self.assertEqual(h.days, [utc(6, 14), utc(9, 19), NOW])
+        self.assertEqual(h.price, [D("100.0"), D("105.0"), D("120.0")])
+        self.assertEqual(h.quantity, [D("1"), D("2"), D("2")])
+        self.assertEqual(h.avg_cost, [D("90"), D("100"), D("100")])
+        self.assertEqual([t.date for t in h.trades], [date(2026, 10, 8)])
+
+    def test_holding_intraday_1d_session_and_seed(self):
+        h = holding_history_intraday(
+            self.aapl, "1d", now=NOW, quote=quote("AAPL", "USD", None),
+            intraday_fn=fake_intraday({"AAPL": [(utc(9, 13, 35), 100.0)]}),
+            history_fn=fake_history({"AAPL": [(date(2026, 10, 8), 98.0)]}))
+        self.assertEqual(h.session_date, date(2026, 10, 9))
+        self.assertEqual(h.days, [utc(9, 13, 35), NOW])
+        self.assertEqual(h.price, [D("100.0"), D("100.0")])
+        self.assertEqual(h.avg_cost, [None, None])  # nothing held
+
+    def test_holding_intraday_seed_before_first_bar(self):
+        self.aapl.opening_quantity = D("1")
+        self.aapl.save()
+        h = holding_history_intraday(
+            self.aapl, "7d", now=NOW, quote=quote("AAPL", "USD", None),
+            intraday_fn=fake_intraday({}),
+            history_fn=fake_history({"AAPL": [(date(2026, 10, 3), 98.0), (date(2026, 10, 9), 101.0)]}))
+        self.assertEqual(h.price, [D("98.0"), D("98.0")])  # no bars: last close before the window
+
     def test_average_cost_not_comparable_across_currencies(self):
         h = holding_history(self.aapl, day(0), day(1), history_fn=fake_history({}), quote=quote("AAPL", "EUR"))
         self.assertFalse(h.avg_cost_comparable)
+
+
+@mock.patch("common.market_data.get_quote", return_value=quote("AAPL", "EUR"))
+@mock.patch("common.market_data.get_quotes", return_value={})
+@mock.patch("common.market_data.get_intraday_history", return_value=[])
+@mock.patch("common.market_data.get_price_history", return_value=[])
+@mock.patch("common.market_data.get_fx_rate", return_value=None)
+class HistoryForRangeTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user("alice")
+        CashAccount.objects.create(user=self.user, name="Bank", currency="EUR", opening_balance=D("5"))
+
+    def test_daily_range_ends_today(self, *mocks):
+        h = history_for_range(self.user, "1m")
+        self.assertFalse(h.intraday)
+        self.assertEqual(h.end, timezone.localdate())
+        self.assertEqual(h.days[-1], h.end)
+        self.assertEqual(len(h.days), 31)
+
+    def test_unknown_key_uses_default(self, *mocks):
+        h = history_for_range(self.user, "bogus")
+        self.assertEqual(len(h.days), 183)
+
+    def test_intraday_keys(self, _fx, _history, intraday, *mocks):
+        h = history_for_range(self.user, "1d")
+        self.assertTrue(h.intraday)
+        self.assertEqual(h.net_worth[-1], D("5"))
+        holding = Holding.objects.create(user=self.user, ticker="AAPL", currency="EUR", opening_quantity=D("1"))
+        h = history_for_range(self.user, "7d", holding=holding)
+        self.assertTrue(h.intraday)
+        self.assertIsInstance(h, HoldingHistory)
+        intraday.assert_called_with("AAPL", "7d")
+        h = history_for_range(self.user, "3m", holding=holding, earliest=date(2020, 1, 1))
+        self.assertFalse(h.intraday)
+        self.assertIsInstance(h, HoldingHistory)
 
 
 @mock.patch("common.market_data.get_quote", return_value=quote("AAPL", "EUR"))
