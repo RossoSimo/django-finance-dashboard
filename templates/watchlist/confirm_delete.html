@@ -1,12 +1,9 @@
 {% extends "base.html" %}
 {% block title %}Confirm delete - FinanceDash{% endblock %}
+{% block page_title %}Confirm delete{% endblock %}
 {% block content %}
-<div class="card p-4" style="max-width: 500px;">
-    <h4>Remove {{ object }} from watchlist?</h4>
-    <form method="post">
-        {% csrf_token %}
-        <button type="submit" class="btn btn-danger">Yes, remove</button>
-        <a href="{% url 'watchlist:home' %}" class="btn btn-link">Cancel</a>
-    </form>
-</div>
+{% url 'watchlist:home' as cancel_url %}
+{% with label=object.ticker|add:" from the watchlist" %}
+{% include "components/_confirm_delete.html" with object_label=label consequence="It will stop showing on your watchlist. Your holdings and alerts are not affected." cancel_url=cancel_url %}
+{% endwith %}
 {% endblock %}

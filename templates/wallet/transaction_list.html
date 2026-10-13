@@ -1,41 +1,14 @@
 {% extends "base.html" %}
 {% block title %}Transactions - FinanceDash{% endblock %}
+{% block page_title %}Transactions{% endblock %}
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <h3 class="mb-0">All transactions</h3>
-    <div>
-        <a href="{% url 'wallet:csv_upload' %}" class="btn btn-sm btn-outline-secondary">Import CSV</a>
-        <a href="{% url 'wallet:add_transaction' %}" class="btn btn-sm btn-primary">+ Transaction</a>
-    </div>
-</div>
+{% url 'wallet:add_transaction' as add_url %}
+{% include "components/_page_header.html" with title="Transactions" subtitle="Editing or deleting a transaction recalculates the affected balances and positions." primary_url=add_url primary_label="Transaction" primary_icon="plus-lg" menu=header_menu %}
 <div class="card p-3">
     {% if transactions %}
-    <p class="text-muted small">Editing or deleting a transaction recalculates the affected balances and positions.</p>
-    <div class="table-responsive">
-    <table class="table table-sm mb-0">
-        <thead><tr><th>Date</th><th>Type</th><th>Target</th><th>Qty</th><th>Price</th><th>Amount</th><th>Fees</th><th>Notes</th><th><span class="visually-hidden">Actions</span></th></tr></thead>
-        <tbody>
-        {% for tx in transactions %}
-            <tr>
-                <td>{{ tx.date }}</td>
-                <td>{{ tx.get_tx_type_display }}</td>
-                <td>{% if tx.holding %}{{ tx.holding.ticker }}{% elif tx.cash_account %}{{ tx.cash_account.name }}{% else %}—{% endif %}</td>
-                <td>{{ tx.quantity|default:"—" }}</td>
-                <td>{{ tx.price|default:"—" }}</td>
-                <td>{{ tx.amount|default:"—" }}</td>
-                <td>{{ tx.fees|default:"—" }}</td>
-                <td>{{ tx.notes }}</td>
-                <td class="text-nowrap text-end">
-                    <a href="{% url 'wallet:edit_transaction' tx.pk %}" class="btn btn-sm btn-outline-secondary">Edit</a>
-                    <a href="{% url 'wallet:delete_transaction' tx.pk %}" class="btn btn-sm btn-outline-danger">Delete</a>
-                </td>
-            </tr>
-        {% endfor %}
-        </tbody>
-    </table>
-    </div>
+    {% include "wallet/_transactions_table.html" with actions=True %}
     {% else %}
-        <p class="text-muted mb-0">No transactions yet.</p>
+    {% include "components/_empty.html" with icon="receipt" text="No transactions yet." action_url=add_url action_label="Add a transaction" %}
     {% endif %}
 </div>
 {% endblock %}

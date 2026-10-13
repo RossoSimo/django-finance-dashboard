@@ -1,13 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Confirm delete - FinanceDash{% endblock %}
+{% block page_title %}Confirm delete{% endblock %}
 {% block content %}
-<div class="card p-4" style="max-width: 500px;">
-    <h4>Remove {{ object }}?</h4>
-    <p class="text-muted">This can't be undone.</p>
-    <form method="post">
-        {% csrf_token %}
-        <button type="submit" class="btn btn-danger">Yes, remove</button>
-        <a href="{% if cancel_url %}{{ cancel_url }}{% else %}{% url 'wallet:home' %}{% endif %}" class="btn btn-link">Cancel</a>
-    </form>
-</div>
+{% include "components/_confirm_delete.html" with object_label=object consequence=consequence cancel_url=cancel_url %}
 {% endblock %}

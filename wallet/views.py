@@ -1,3 +1,6 @@
+from decimal import Decimal
+from urllib.parse import quote
+
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.http import HttpResponse
@@ -17,14 +20,66 @@ from .services import (
 )
 
 
+INFLOW_TYPES = {"sell", "deposit", "dividend"}
+
+
+def _decorate_transactions(transactions):
+    """Attach display fields: target label, currency and a signed cash amount."""
+    out = []
+    for tx in transactions:
+        tx.target = tx.holding.ticker if tx.holding else (tx.cash_account.name if tx.cash_account else None)
+        if tx.amount is not None:
+            value = tx.amount
+        elif tx.quantity is not None and tx.price is not None:
+            value = tx.quantity * tx.price
+        else:
+            value = None
+        if tx.cash_account:
+            tx.currency = tx.cash_account.currency
+        else:
+            tx.currency = tx.holding.currency if tx.holding else ""
+        if value is None:
+            tx.signed_amount = None
+        else:
+            tx.signed_amount = value if tx.tx_type in INFLOW_TYPES else -value
+        tx.menu = [
+            {"url": reverse("wallet:edit_transaction", args=[tx.pk]), "label": "Edit", "icon": "pencil"},
+            {"url": reverse("wallet:delete_transaction", args=[tx.pk]), "label": "Delete", "icon": "trash",
+             "danger": True},
+        ]
+        out.append(tx)
+    return out
+
+
 def wallet_home(request):
     summary = net_worth_summary(request.user)
     cash_accounts = CashAccount.objects.filter(user=request.user)
-    recent_tx = Transaction.objects.filter(user=request.user).select_related("holding", "cash_account")[:15]
+    recent_tx = _decorate_transactions(
+        Transaction.objects.filter(user=request.user).select_related("holding", "cash_account")[:15]
+    )
+    gains = [row["gain"] for row in summary["rows"] if row["gain"] is not None]
+    total_gain = sum(gains, Decimal("0")) if gains else None
+    for row in summary["rows"]:
+        holding = row["holding"]
+        row["menu"] = [
+            {"url": reverse("performance:holding", args=[holding.pk]), "label": "Chart", "icon": "graph-up"},
+            {"url": f"{reverse('alerts:add')}?ticker={quote(holding.ticker)}", "label": "Add alert",
+             "icon": "bell"},
+            {"url": reverse("wallet:delete_holding", args=[holding.pk]), "label": "Remove", "icon": "trash",
+             "post": True, "confirm": f"Remove {holding.ticker}?", "danger": True},
+        ]
+    header_menu = [
+        {"url": reverse("wallet:add_holding"), "label": "Add holding", "icon": "plus-circle"},
+        {"url": reverse("wallet:add_cash_account"), "label": "Add cash account", "icon": "bank"},
+        {"url": reverse("wallet:csv_upload"), "label": "Import CSV", "icon": "filetype-csv"},
+        {"url": reverse("assistant:import_upload"), "label": "Import screenshot", "icon": "camera"},
+    ]
     return render(request, "wallet/wallet_home.html", {
         "summary": summary,
         "cash_accounts": cash_accounts,
         "recent_tx": recent_tx,
+        "total_gain": total_gain,
+        "header_menu": header_menu,
     })
 
 
@@ -89,12 +144,16 @@ def remove_transaction(request, pk):
         return redirect("wallet:transaction_list")
     return render(request, "wallet/confirm_delete.html", {
         "object": tx, "cancel_url": reverse("wallet:transaction_list"),
+        "consequence": "Balances and positions will be recalculated without it.",
     })
 
 
 def transaction_list(request):
     tx = Transaction.objects.filter(user=request.user).select_related("holding", "cash_account")
-    return render(request, "wallet/transaction_list.html", {"transactions": tx})
+    header_menu = [{"url": reverse("wallet:csv_upload"), "label": "Import CSV", "icon": "filetype-csv"}]
+    return render(request, "wallet/transaction_list.html", {
+        "transactions": _decorate_transactions(tx), "header_menu": header_menu,
+    })
 
 
 def delete_holding(request, pk):
@@ -110,7 +169,10 @@ def delete_holding(request, pk):
         holding.delete()
         messages.success(request, f"Removed {holding.ticker}.")
         return redirect("wallet:home")
-    return render(request, "wallet/confirm_delete.html", {"object": holding})
+    return render(request, "wallet/confirm_delete.html", {
+        "object": holding, "cancel_url": reverse("wallet:home"),
+        "consequence": "This can't be undone.",
+    })
 
 
 CSV_SESSION_KEY = "csv_import_rows"

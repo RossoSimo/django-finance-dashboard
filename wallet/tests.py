@@ -787,3 +787,58 @@ class CurrencyViewTests(TestCase):
     def test_new_account_form_defaults_to_base_currency(self, *mocks):
         form = self.client.get(reverse("wallet:add_cash_account")).context["form"]
         self.assertEqual(form["currency"].value(), "EUR")
+
+
+class WalletPageTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user("alice")
+        set_base_currency(self.user, "USD")
+        self.client.force_login(self.user)
+        self.aapl = Holding.objects.create(user=self.user, ticker="AAPL", opening_quantity=D("10"),
+                                           opening_avg_cost=D("100"))
+
+    def _home(self, price=120.0):
+        with mock.patch("common.market_data.get_quotes", return_value={"AAPL": make_quote("AAPL", price)}):
+            return self.client.get(reverse("wallet:home"))
+
+    def test_holdings_rows_are_stackable_and_signed(self):
+        resp = self._home(120.0)
+        self.assertContains(resp, 'class="table table-sm align-middle mb-0 table-stack')
+        self.assertContains(resp, 'data-label="Gain/Loss"')
+        self.assertContains(resp, "▲")
+        self.assertContains(resp, "table-responsive")
+
+    def test_losing_holding_shows_down_arrow(self):
+        self.assertContains(self._home(80.0), "▼")
+
+    def test_holdings_totals_row_sums_gains(self):
+        resp = self._home(120.0)
+        self.assertContains(resp, "Total")
+        self.assertEqual(resp.context["total_gain"], D("200"))
+
+    def test_remove_holding_uses_confirm_dialog(self):
+        resp = self._home()
+        self.assertContains(resp, 'data-confirm="Remove AAPL?"')
+        self.assertNotContains(resp, 'onclick="return confirm(')
+
+    def test_header_menu_links_to_add_and_import_pages(self):
+        resp = self._home()
+        for name in ("wallet:add_holding", "wallet:add_cash_account", "wallet:csv_upload", "assistant:import_upload"):
+            self.assertContains(resp, reverse(name))
+
+    def test_transaction_list_groups_by_date(self):
+        cash = CashAccount.objects.create(user=self.user, name="Bank", opening_balance=D("100"))
+        for amount in ("5", "6"):
+            save_transaction(Transaction(user=self.user, tx_type="deposit", cash_account=cash,
+                                         amount=D(amount), date=date(2026, 3, 4)))
+        resp = self.client.get(reverse("wallet:transaction_list"))
+        self.assertContains(resp, "4 Mar 2026", count=1)
+        self.assertContains(resp, "table-stack")
+
+    def test_delete_confirm_page_uses_shared_component(self):
+        cash = CashAccount.objects.create(user=self.user, name="Bank", opening_balance=D("100"))
+        tx = save_transaction(Transaction(user=self.user, tx_type="deposit", cash_account=cash,
+                                          amount=D("5"), date=date(2026, 3, 4)))
+        resp = self.client.get(reverse("wallet:delete_transaction", args=[tx.pk]))
+        self.assertContains(resp, "form-card")
+        self.assertContains(resp, "recalculat")

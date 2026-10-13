@@ -2,9 +2,7 @@
 {% block title %}{{ title }} - FinanceDash{% endblock %}
 {% block page_title %}{{ title }}{% endblock %}
 {% block content %}
-<h3 class="mb-3">{{ title }}</h3>
-<div style="max-width: 600px;">
-    {% url 'watchlist:home' as cancel_url %}
-    {% include "components/_form_card.html" with cancel_url=cancel_url %}
-</div>
+{% include "components/_page_header.html" with title=title %}
+{% url 'watchlist:home' as cancel_url %}
+{% include "components/_form_card.html" with cancel_url=cancel_url submit_label="Save" %}
 {% endblock %}

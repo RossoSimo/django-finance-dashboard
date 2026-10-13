@@ -1,118 +1,82 @@
 {% extends "base.html" %}
 {% block title %}Wallet - FinanceDash{% endblock %}
+{% block page_title %}Wallet{% endblock %}
 {% block content %}
-
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <h3 class="mb-0">Wallet &amp; Liquidity</h3>
-    <div>
-        <a href="{% url 'wallet:add_cash_account' %}" class="btn btn-sm btn-outline-secondary">+ Cash account</a>
-        <a href="{% url 'wallet:add_holding' %}" class="btn btn-sm btn-outline-secondary">+ Holding</a>
-        <a href="{% url 'wallet:csv_upload' %}" class="btn btn-sm btn-outline-secondary">Import CSV</a>
-        <a href="{% url 'wallet:add_transaction' %}" class="btn btn-sm btn-primary">+ Transaction</a>
-    </div>
-</div>
+{% url 'wallet:add_transaction' as add_tx_url %}
+{% include "components/_page_header.html" with title="Wallet" subtitle="Cash, holdings and recent activity." primary_url=add_tx_url primary_label="Transaction" primary_icon="plus-lg" menu=header_menu %}
 
 {% include "wallet/_fx_warning.html" %}
 
-<div class="row g-3 mb-4">
-    <div class="col-md-4">
-        <div class="card p-3">
-            <div class="text-muted small">Total cash</div>
-            <div class="fs-4 fw-bold">{{ summary.cash_total|floatformat:2 }} {{ summary.base_currency }}</div>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="card p-3">
-            <div class="text-muted small">Holdings value</div>
-            <div class="fs-4 fw-bold">{{ summary.holdings_value|floatformat:2 }} {{ summary.base_currency }}</div>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="card p-3">
-            <div class="text-muted small">Net worth</div>
-            <div class="fs-4 fw-bold">{{ summary.net_worth|floatformat:2 }} {{ summary.base_currency }}</div>
-        </div>
-    </div>
+<div class="stat-row mb-4">
+    <div class="card p-3">{% include "components/_stat.html" with label="Net worth" value=summary.net_worth|money:summary.base_currency size="lg" %}</div>
+    <div class="card p-3">{% include "components/_stat.html" with label="Total cash" value=summary.cash_total|money:summary.base_currency %}</div>
+    <div class="card p-3">{% include "components/_stat.html" with label="Holdings value" value=summary.holdings_value|money:summary.base_currency %}</div>
 </div>
 
 <div class="card p-3 mb-4">
-    <h5>Cash accounts</h5>
-    {% if cash_accounts %}
-    <table class="table table-sm">
-        <thead><tr><th>Name</th><th>Currency</th><th>Balance</th></tr></thead>
-        <tbody>
-        {% for acc in cash_accounts %}
-            <tr><td>{{ acc.name }}</td><td>{{ acc.currency }}</td><td>{{ acc.balance|floatformat:2 }}</td></tr>
-        {% endfor %}
-        </tbody>
-    </table>
-    {% else %}
-        <p class="text-muted mb-0">No cash accounts yet.</p>
-    {% endif %}
-</div>
-
-<div class="card p-3 mb-4">
-    <h5>Holdings</h5>
+    <h2 class="h5">Holdings</h2>
     {% if summary.rows %}
-    <table class="table table-sm">
+    <div class="table-responsive">
+    <table class="table table-sm align-middle mb-0 table-stack">
         <thead>
             <tr>
-                <th>Ticker</th><th>Type</th><th>Qty</th><th>Avg cost</th>
-                <th>Price</th><th>Market value ({{ summary.base_currency }})</th><th>Gain/Loss ({{ summary.base_currency }})</th><th><span class="visually-hidden">Actions</span></th>
+                <th>Holding</th><th class="num">Qty</th><th class="num">Avg cost</th>
+                <th class="num">Price</th><th class="num">Market value ({{ summary.base_currency }})</th><th class="num">Gain/Loss ({{ summary.base_currency }})</th><th><span class="visually-hidden">Actions</span></th>
             </tr>
         </thead>
         <tbody>
         {% for row in summary.rows %}
             <tr>
-                <td><a href="{% url 'performance:holding' row.holding.pk %}" title="Price chart"><strong>{{ row.holding.ticker }}</strong></a></td>
-                <td>{{ row.holding.get_asset_type_display }}</td>
-                <td>{{ row.holding.quantity }}</td>
-                <td>{{ row.holding.avg_cost|floatformat:2 }} {{ row.holding.currency }}</td>
-                <td>{% if row.quote.price is not None %}{{ row.price|floatformat:2 }} {{ row.price_currency }}{% else %}<span title="No live quote; showing cost">—</span>{% endif %}</td>
-                <td>{% if row.market_value is not None %}{{ row.market_value|floatformat:2 }}{% else %}<span title="No {{ row.price_currency }} rate">{{ row.market_value_native|floatformat:2 }} {{ row.price_currency }}*</span>{% endif %}</td>
-                <td class="{% if row.gain > 0 %}positive{% elif row.gain < 0 %}negative{% endif %}">
-                    {% if row.gain is not None %}{{ row.gain|floatformat:2 }}{% if row.gain_pct is not None %} ({{ row.gain_pct|floatformat:1 }}%){% endif %}{% else %}—{% endif %}
-                </td>
-                <td>
-                    <a href="{% url 'alerts:add' %}?ticker={{ row.holding.ticker|urlencode }}" class="btn btn-sm btn-outline-secondary" aria-label="Add price alert for {{ row.holding.ticker }}">🔔</a>
-                    <form method="post" action="{% url 'wallet:delete_holding' row.holding.pk %}" class="d-inline">
-                        {% csrf_token %}
-                        <button class="btn btn-sm btn-outline-danger" type="submit" onclick="return confirm('Remove {{ row.holding.ticker }}?')">×</button>
-                    </form>
-                </td>
+                <td class="cell-primary" data-label=""><a href="{% url 'performance:holding' row.holding.pk %}" title="Price chart"><strong>{{ row.holding.ticker }}</strong></a>{% if row.holding.name %} <span class="text-body-secondary small fw-normal">{{ row.holding.name }}</span>{% endif %} <span class="badge text-bg-secondary fw-normal">{{ row.holding.get_asset_type_display }}</span></td>
+                <td class="num figure" data-label="Qty">{{ row.holding.quantity|num }}</td>
+                <td class="num figure" data-label="Avg cost">{{ row.holding.avg_cost|money:row.holding.currency }}</td>
+                <td class="num figure" data-label="Price">{% if row.quote.price is not None %}{{ row.price|money:row.price_currency }}{% else %}<span title="No live quote; showing cost">—</span>{% endif %}</td>
+                <td class="num figure cell-figure" data-label="Market value">{% if row.market_value is not None %}{{ row.market_value|money:summary.base_currency }}{% else %}<span title="No {{ row.price_currency }} rate">{{ row.market_value_native|money:row.price_currency }}*</span>{% endif %}</td>
+                <td class="num" data-label="Gain/Loss">{% if row.gain is not None %}{% include "components/_change.html" with value=row.gain pct=row.gain_pct currency=summary.base_currency %}{% else %}—{% endif %}</td>
+                <td class="num" data-label="">{% include "components/_row_actions.html" with label="Actions for "|add:row.holding.ticker items=row.menu %}</td>
             </tr>
         {% endfor %}
         </tbody>
+        <tfoot>
+            <tr>
+                <td class="cell-primary" data-label="">Total</td>
+                <td class="d-none d-md-table-cell"></td><td class="d-none d-md-table-cell"></td><td class="d-none d-md-table-cell"></td>
+                <td class="num figure cell-figure" data-label="Market value">{{ summary.holdings_value|money:summary.base_currency }}</td>
+                <td class="num" data-label="Gain/Loss">{% if total_gain is not None %}{% include "components/_change.html" with value=total_gain pct=None currency=summary.base_currency %}{% else %}—{% endif %}</td>
+                <td class="d-none d-md-table-cell"></td>
+            </tr>
+        </tfoot>
     </table>
+    </div>
     {% else %}
-        <p class="text-muted mb-0">No holdings yet.</p>
+    {% url 'wallet:add_holding' as add_holding_url %}
+    {% include "components/_empty.html" with icon="pie-chart" text="No holdings yet." action_url=add_holding_url action_label="Add a holding" %}
+    {% endif %}
+</div>
+
+<div class="card p-3 mb-4">
+    <h2 class="h5">Cash accounts</h2>
+    {% if cash_accounts %}
+    <ul class="cash-list">
+        {% for acc in cash_accounts %}
+        <li><span>{{ acc.name }}</span><span class="figure fw-semibold">{{ acc.balance|money:acc.currency }}</span></li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    {% url 'wallet:add_cash_account' as add_cash_url %}
+    {% include "components/_empty.html" with icon="bank" text="No cash accounts yet." action_url=add_cash_url action_label="Add a cash account" %}
     {% endif %}
 </div>
 
 <div class="d-flex justify-content-between align-items-center mb-2">
-    <h5 class="mb-0">Recent transactions</h5>
+    <h2 class="h5 mb-0">Recent transactions</h2>
     <a href="{% url 'wallet:transaction_list' %}" class="small">View all &rarr;</a>
 </div>
 <div class="card p-3">
     {% if recent_tx %}
-    <table class="table table-sm mb-0">
-        <thead><tr><th>Date</th><th>Type</th><th>Target</th><th>Qty</th><th>Price</th><th>Amount</th></tr></thead>
-        <tbody>
-        {% for tx in recent_tx %}
-            <tr>
-                <td>{{ tx.date }}</td>
-                <td>{{ tx.get_tx_type_display }}</td>
-                <td>{% if tx.holding %}{{ tx.holding.ticker }}{% elif tx.cash_account %}{{ tx.cash_account.name }}{% else %}—{% endif %}</td>
-                <td>{{ tx.quantity|default:"—" }}</td>
-                <td>{{ tx.price|default:"—" }}</td>
-                <td>{{ tx.amount|default:"—" }}</td>
-            </tr>
-        {% endfor %}
-        </tbody>
-    </table>
+    {% include "wallet/_transactions_table.html" with transactions=recent_tx actions=False %}
     {% else %}
-        <p class="text-muted mb-0">No transactions yet.</p>
+    {% include "components/_empty.html" with icon="receipt" text="No transactions yet." action_url=add_tx_url action_label="Add a transaction" %}
     {% endif %}
 </div>
-
 {% endblock %}

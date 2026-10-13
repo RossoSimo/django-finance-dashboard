@@ -1,0 +1,23 @@
+{% comment %}transactions (decorated by wallet.views), actions (True to show the row menu). Dates are shown once per day.{% endcomment %}
+<div class="table-responsive">
+<table class="table table-sm align-middle mb-0 table-stack">
+    <thead><tr><th>Type</th><th>Target</th><th class="num">Qty</th><th class="num">Price</th><th class="num">Amount</th>{% if actions %}<th class="num">Fees</th><th>Notes</th><th><span class="visually-hidden">Actions</span></th>{% endif %}</tr></thead>
+    <tbody>
+    {% for tx in transactions %}
+        {% ifchanged tx.date %}<tr class="date-row"><th colspan="{% if actions %}8{% else %}5{% endif %}" scope="colgroup" class="text-body-secondary small fw-semibold">{{ tx.date|date:"j M Y" }}</th></tr>{% endifchanged %}
+        <tr>
+            <td class="cell-primary" data-label=""><span class="badge text-bg-secondary">{{ tx.get_tx_type_display }}</span>{% if tx.target %} <strong class="d-md-none">{{ tx.target }}</strong>{% endif %}</td>
+            <td data-label="Target" class="d-none d-md-table-cell">{{ tx.target|default:"—" }}</td>
+            <td class="num figure" data-label="Qty">{% if tx.quantity is not None %}{{ tx.quantity|num }}{% else %}—{% endif %}</td>
+            <td class="num figure" data-label="Price">{% if tx.price is not None %}{{ tx.price|num }}{% else %}—{% endif %}</td>
+            <td class="num figure cell-figure" data-label="Amount">{% if tx.signed_amount is not None %}{% include "components/_change.html" with value=tx.signed_amount pct=None currency=tx.currency %}{% else %}—{% endif %}</td>
+            {% if actions %}
+            <td class="num figure" data-label="Fees">{% if tx.fees %}{{ tx.fees|money:tx.currency }}{% else %}—{% endif %}</td>
+            <td data-label="Notes">{{ tx.notes|default:"—" }}</td>
+            <td class="num" data-label="">{% include "components/_row_actions.html" with label="Actions for this transaction" items=tx.menu %}</td>
+            {% endif %}
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
