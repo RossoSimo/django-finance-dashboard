@@ -10,14 +10,18 @@ Intraday ranges (1D, 7D): the same on a time grid built from intraday bars,
 bucketed to 5 minutes (1D) or 1 hour (7D) in UTC and merged across holdings.
 1D shows the latest session (local date of the newest bar of anything held);
 7D the last 7 days. Each holding's price is carried forward from its last bar
-at or before a point; before its first bar it is the last daily close before
-the window. Positions and cash follow the ledger up to the point's local date
-(transactions carry dates, not times). Every point uses the current FX rate.
+at or before a point; without one (e.g. funds, which have no intraday bars)
+it is the last daily close on or before the point's local date. Positions and
+cash follow the ledger up to the point's local date (transactions carry
+dates, not times). Every point uses the current FX rate. The grid ends at
+`now`, except for a 1D session that isn't today's (e.g. at the weekend): that
+chart ends on the session's last bucket instead of jumping days ahead.
 
-Live last point: when a range ends today (always, for intraday ranges), the
-final point values each holding at its live quote and converts at the
-current FX rate, so the chart ends on the same numbers as the wallet. Holdings
-without a live price keep their last historical price.
+Live last point: when a range ends today (and always for intraday ranges),
+the final point values each holding at its live quote and converts at the
+current FX rate (daily ranges fall back to the latest FX history), so the
+chart ends on the same numbers as the wallet. Holdings without a live price
+keep their last historical price.
 
 Fallbacks, mirroring net_worth_summary():
 - no price yet for a point (e.g. before the first available close): value
@@ -61,7 +65,7 @@ DEFAULT_RANGE = "6m"
 DASHBOARD_DEFAULT_RANGE = "1m"
 INTRADAY_RANGES = {"1d", "7d"}  # drawn from intraday bars, not daily closes
 INTRADAY_BUCKET_MINUTES = {"1d": 5, "7d": 60}
-INTRADAY_SEED_LOOKBACK = timedelta(days=10)  # how far back to look for the close before the window
+INTRADAY_SEED_LOOKBACK = timedelta(days=10)  # daily closes fetched from this long before the window
 MAX_YEARS = 10
 DAILY_POINTS_LIMIT = 400  # beyond this many days, sample weekly
 
@@ -120,30 +124,36 @@ class _Replay:
 
 class _FX:
     """Per-day conversion into the base currency, from FX history with
-    today's rate as fallback. `day=None` asks for the current rate only."""
+    today's rate as fallback. `day=None` asks for the current rate only;
+    `current_first` prefers the current rate, falling back to history."""
 
     def __init__(self, base, start, history_fn, converter):
         self.base, self.start, self.history_fn, self.now = base, start, history_fn, converter
         self.series: dict[str, _Series] = {}
         self.missing: set[str] = set()
 
-    def rate(self, currency, day=None):
+    def _history(self, currency):
+        if currency not in self.series:
+            self.series[currency] = _Series(
+                (d, Decimal(str(v))) for d, v in self.history_fn(f"{currency}{self.base}=X", self.start)
+            )
+        return self.series[currency]
+
+    def rate(self, currency, day=None, current_first=False):
         if currency == self.base:
             return Decimal("1")
-        rate = None
-        if day is not None:
-            if currency not in self.series:
-                self.series[currency] = _Series(
-                    (d, Decimal(str(v))) for d, v in self.history_fn(f"{currency}{self.base}=X", self.start)
-                )
-            rate = self.series[currency].at(day)
-        rate = rate or self.now.rate(currency)
+        if day is None:
+            rate = self.now.rate(currency)
+        elif current_first:
+            rate = self.now.rate(currency) or self._history(currency).at(day)
+        else:
+            rate = self._history(currency).at(day) or self.now.rate(currency)
         if rate is None:
             self.missing.add(currency)
         return rate
 
-    def convert(self, amount, currency, day=None):
-        rate = self.rate(currency, day)
+    def convert(self, amount, currency, day=None, current_first=False):
+        rate = self.rate(currency, day, current_first)
         return amount * rate if rate is not None else None
 
 
@@ -229,13 +239,17 @@ def _value_portfolio(result, holdings, accounts, quotes, *, points, day_of, load
     load_prices(holding, raw_currency) -> (prices, first_price), prices.at(point)
         giving the historical price (or None);
     fx_days[i] -> the day whose FX rate converts point i (None: current rate);
-    live -> the final point uses each holding's live quote when it has one.
+    live -> the final point uses each holding's live quote when it has one,
+        and the current FX rate before that day's FX history.
     """
     last = len(points) - 1
     holdings_value = [ZERO] * len(points)
     invested = [ZERO] * len(points)
     cash = [ZERO] * len(points)
     before_start = day_of(points[0]) - ONE_DAY
+
+    def convert(amount, currency, i):
+        return fx.convert(amount, currency, fx_days[i], current_first=live and i == last)
 
     for h in holdings:
         quote = quotes.get(h.ticker.upper())
@@ -256,10 +270,10 @@ def _value_portfolio(result, holdings, accounts, quotes, *, points, day_of, load
             held_in_range = True
             price = live_price if i == last and live_price is not None else prices.at(point)
             if price is not None:
-                value = fx.convert(qty * price, price_currency, fx_days[i])
+                value = convert(qty * price, price_currency, i)
             else:
-                value = fx.convert(qty * avg, h.currency, fx_days[i])
-            cost = fx.convert(qty * avg, h.currency, fx_days[i])
+                value = convert(qty * avg, h.currency, i)
+            cost = convert(qty * avg, h.currency, i)
             if value is not None:
                 holdings_value[i] += value
             if cost is not None:
@@ -278,7 +292,7 @@ def _value_portfolio(result, holdings, accounts, quotes, *, points, day_of, load
         balance = ledger.replay_cash(account.opening_balance, replay.upto(before_start))
         for i, point in enumerate(points):
             balance = ledger.replay_cash(balance, replay.upto(day_of(point)))
-            converted = fx.convert(balance, account.currency, fx_days[i])
+            converted = convert(balance, account.currency, i)
             if converted is not None:
                 cash[i] += converted
 
@@ -314,9 +328,8 @@ def portfolio_history(user, start: date, end: date, history_fn=None, quotes=None
         prices = _Series((d, normalize(Decimal(str(v)), raw_currency)[0]) for d, v in history_fn(h.ticker, start))
         return prices, prices.first_on_or_after(start)
 
-    fx_days = days[:-1] + [None if live else days[-1]]
     _value_portfolio(result, holdings, accounts, quotes, points=days, day_of=_same_day,
-                     load_prices=load_prices, fx=fx, fx_days=fx_days, live=live)
+                     load_prices=load_prices, fx=fx, fx_days=days, live=live)
     return result
 
 
@@ -347,6 +360,11 @@ class _Window:
     def start_date(self):
         return _local_date(self.start)
 
+    @property
+    def reaches_now(self):
+        """7D always ends at `now`; 1D only when the session is today's."""
+        return self.session_date is None or self.session_date == _local_date(self.now)
+
     def keeps(self, moment):
         if self.session_date is not None:
             return _local_date(moment) == self.session_date
@@ -364,38 +382,39 @@ def _intraday_window(key: str, now: datetime, last_bar_times: list[datetime]) ->
 
 
 def _grid(window: _Window, bar_lists) -> list[datetime]:
-    """Union of the bucketed bar times in the window, ending at `now`."""
+    """Union of the bucketed bar times in the window, ending at `now` when
+    the window reaches it."""
     grid = sorted({_bucket(t, window.minutes) for bars in bar_lists for t, _ in bars if window.keeps(t)})
     if not grid:
         grid = [window.start]
-    if grid[-1] < window.now:
+    if window.reaches_now and grid[-1] < window.now:
         grid.append(window.now)
     return grid
 
 
 class _IntradayPrices:
-    """Bar closes carried forward on bucketed times; `seed` before the first bar."""
+    """Bar closes carried forward on bucketed times; where there's no bar
+    yet (or none at all, e.g. funds), the last daily close on or before the
+    point's local date."""
 
-    def __init__(self, bars, minutes, raw_currency, seed):
+    def __init__(self, bars, closes, minutes, raw_currency):
         by_bucket = {}
         for moment, value in bars:  # oldest first: the last bar in a bucket wins
             by_bucket[_bucket(moment, minutes)] = normalize(Decimal(str(value)), raw_currency)[0]
         self.bars = _Series(by_bucket.items())
-        self.seed = seed
+        self.closes = _Series((d, normalize(Decimal(str(v)), raw_currency)[0]) for d, v in closes)
 
     def __bool__(self):
-        return bool(self.bars) or self.seed is not None
+        return bool(self.bars) or bool(self.closes)
 
     def at(self, moment):
         price = self.bars.at(moment)
-        return price if price is not None else self.seed
+        return price if price is not None else self.closes.at(_local_date(moment))
 
 
-def _last_close_before(history_fn, ticker, raw_currency, day):
-    closes = [(d, v) for d, v in history_fn(ticker, day - INTRADAY_SEED_LOOKBACK) if d < day]
-    if not closes:
-        return None
-    return normalize(Decimal(str(max(closes, key=lambda p: p[0])[1])), raw_currency)[0]
+def _intraday_prices(bars, history_fn, ticker, window, raw_currency):
+    closes = history_fn(ticker, window.start_date - INTRADAY_SEED_LOOKBACK)
+    return _IntradayPrices(bars, closes, window.minutes, raw_currency)
 
 
 def _bars(intraday_fn, ticker, range_key, now):
@@ -440,11 +459,10 @@ def portfolio_history_intraday(user, range_key: str, intraday_fn=None, history_f
         quotes = get_quotes([h.ticker for h in holdings])
 
     def load_prices(h, raw_currency):
-        seed = _last_close_before(history_fn, h.ticker, raw_currency, window.start_date)
-        prices = _IntradayPrices(bars[h.pk], window.minutes, raw_currency, seed)
+        prices = _intraday_prices(bars[h.pk], history_fn, h.ticker, window, raw_currency)
         return prices, prices.at(points[0])
 
-    result = PortfolioHistory(base_currency=base, start=window.start_date, end=today, days=points,
+    result = PortfolioHistory(base_currency=base, start=window.start_date, end=_local_date(points[-1]), days=points,
                               intraday=True, session_date=window.session_date)
     _value_portfolio(result, holdings, accounts, quotes, points=points, day_of=_local_date,
                      load_prices=load_prices, fx=fx, fx_days=[None] * len(points), live=True)
@@ -520,13 +538,13 @@ def holding_history_intraday(holding: Holding, range_key: str, intraday_fn=None,
 
     bars = _bars(intraday_fn, holding.ticker, range_key, now)
     window = _intraday_window(range_key, now, [bars[-1][0]] if bars else [])
-    seed = _last_close_before(history_fn, holding.ticker, raw_currency, window.start_date)
-    prices = _IntradayPrices(bars, window.minutes, raw_currency, seed)
+    prices = _intraday_prices(bars, history_fn, holding.ticker, window, raw_currency)
 
     result = HoldingHistory(holding=holding, price_currency=price_currency, days=_grid(window, [bars]),
                             intraday=True, session_date=window.session_date)
     _fill_holding_history(result, prices, _live_price(quote),
-                          day_of=_local_date, first_day=window.start_date, last_day=_local_date(now))
+                          day_of=_local_date, first_day=window.start_date,
+                          last_day=_local_date(result.days[-1]))
     return result
 
 
