@@ -143,3 +143,15 @@ button.fd-navlink { width: 100%; background: none; border: 0; text-align: left; 
 
 .chart-box { position: relative; height: 280px; }
 @media (max-width: 575.98px) { .chart-box { height: 220px; } }
+
+/* Live range stats (charts.js sets data-direction) and the allocation donut */
+.change-live[data-direction="up"] { color: var(--fd-positive); }
+.change-live[data-direction="down"] { color: var(--fd-negative); }
+.change-live[data-direction="flat"] { color: var(--fd-muted); }
+.donut-box { position: relative; height: 200px; }
+.donut-total { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; text-align: center; }
+.donut-total .figure { font-weight: 600; font-size: 1.05rem; }
+.mover-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .45rem 0; border-bottom: 1px solid var(--fd-border); }
+.mover-row:last-child { border-bottom: 0; }
+.range-scroll { overflow-x: auto; max-width: 100%; }
+.range-scroll .btn-group { flex-wrap: nowrap; }

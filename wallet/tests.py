@@ -10,6 +10,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from common.market_data import Quote
+from common.testing import empty_dashboard_history
 
 from . import ledger
 from .forms import CashAccountForm, HoldingForm, TransactionForm
@@ -755,6 +756,7 @@ class CurrencyHelperTests(TestCase):
             self.assertIsNone(market_data.get_fx_rate("USD", "EUR"))
 
 
+@mock.patch("dashboard.views.history_for_range", new=empty_dashboard_history)
 @mock.patch("dashboard.views.get_news_for_tickers", return_value=[])
 @mock.patch("dashboard.views.get_quotes", return_value={})
 @mock.patch("common.market_data.get_quotes", return_value={})
@@ -767,23 +769,15 @@ class CurrencyViewTests(TestCase):
         CashAccount.objects.create(user=self.user, name="Broker", currency="USD", opening_balance=D("5"))
         with mock.patch("common.market_data.get_fx_rate", return_value=None):
             resp = self.client.get(reverse("dashboard:home"))
-        self.assertContains(resp, "0.00 EUR")
+        self.assertContains(resp, "0,00 €")
         self.assertContains(resp, "left out of the totals")
         self.assertFalse(NetWorthSnapshot.objects.exists())
-
-    def test_trend_chart_only_uses_snapshots_in_the_base_currency(self, *mocks):
-        NetWorthSnapshot.objects.create(user=self.user, date=date(2026, 1, 1), currency="USD", net_worth=D("1"))
-        NetWorthSnapshot.objects.create(user=self.user, date=date(2026, 1, 2), currency="EUR", net_worth=D("2"))
-        resp = self.client.get(reverse("dashboard:home"))
-        chart = resp.context["chart_data_json"]
-        self.assertIn("2.0", chart)
-        self.assertNotIn("1.0,", chart)
 
     def test_settings_page_changes_base_currency(self, *mocks):
         resp = self.client.post(reverse("settings"), {"base_currency": "USD"})
         self.assertRedirects(resp, reverse("settings"), fetch_redirect_response=False)
         self.assertEqual(get_profile(self.user).base_currency, "USD")
-        self.assertContains(self.client.get(reverse("dashboard:home")), "0.00 USD")
+        self.assertContains(self.client.get(reverse("dashboard:home")), "0,00 $")
 
     def test_settings_rejects_unknown_currency(self, *mocks):
         resp = self.client.post(reverse("settings"), {"base_currency": "XXX"})

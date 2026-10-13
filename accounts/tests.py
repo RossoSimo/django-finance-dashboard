@@ -6,6 +6,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from accounts.models import Profile
+from common.testing import empty_dashboard_history
 from wallet.models import CashAccount, Holding, NetWorthSnapshot
 from watchlist.forms import WatchlistItemForm
 from watchlist.models import WatchlistItem
@@ -71,6 +72,7 @@ class AuthFlowTests(TestCase):
         self.assertNotIn("_auth_user_id", self.client.session)
 
 
+@mock.patch("dashboard.views.history_for_range", new=empty_dashboard_history)
 @mock.patch("newsfeed.views.get_news_for_tickers", return_value=[])
 @mock.patch("dashboard.views.get_news_for_tickers", return_value=[])
 @mock.patch("common.market_data.get_quotes", return_value={})

@@ -1,7 +1,11 @@
-{% comment %}label, value (pre-formatted), change, change_pct, currency, footnote, size ("lg"), stat_id{% endcomment %}
+{% comment %}label, value (pre-formatted), change, change_pct, currency, footnote, size ("lg"), stat_id.
+Live stats (updated by charts.js when the range changes): value_key adds data-stat to the value;
+live_change=True treats change/change_pct as pre-formatted strings (change may be omitted) (payload stats) and adds
+data-stat="change"/"change_pct" with data-direction (up/down/flat).{% endcomment %}
 <div class="stat{% if size == "lg" %} stat-lg{% endif %}"{% if stat_id %} id="{{ stat_id }}"{% endif %}>
     <div class="stat-label">{{ label }}</div>
-    <div class="stat-value figure">{{ value }}</div>
-    {% if change is not None or change_pct is not None %}<div class="stat-change">{% include "components/_change.html" with value=change pct=change_pct currency=currency %}</div>{% endif %}
+    <div class="stat-value figure"{% if value_key %} data-stat="{{ value_key }}"{% endif %}>{{ value }}</div>
+    {% if live_change %}<div class="stat-change">{% if change %}<span class="change change-live" data-stat="change" data-direction="{{ direction }}">{{ change }}</span> {% endif %}<span class="change change-live" data-stat="change_pct" data-direction="{{ direction }}">{{ change_pct }}</span></div>
+    {% elif change is not None or change_pct is not None %}<div class="stat-change">{% include "components/_change.html" with value=change pct=change_pct currency=currency %}</div>{% endif %}
     {% if footnote %}<div class="stat-footnote small text-body-secondary">{{ footnote }}</div>{% endif %}
 </div>

@@ -9,6 +9,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from common.market_data import Quote
+from common.testing import empty_dashboard_history
 
 from .forms import PriceAlertForm
 from .models import PriceAlert
@@ -155,6 +156,7 @@ class PriceAlertFormTests(TestCase):
         self.assertIn("target_price", form.errors)
 
 
+@mock.patch("dashboard.views.history_for_range", new=empty_dashboard_history)
 @mock.patch("dashboard.views.get_news_for_tickers", return_value=[])
 @mock.patch("dashboard.views.get_quotes", return_value={})
 @mock.patch("watchlist.views.get_quotes", return_value={})

@@ -35,10 +35,11 @@
     function money(value, currency, maxDecimals) {
         if (value === null || value === undefined) { return "—"; }
         try {
+            // Match the server filters: 1.234,56 €, with U+2212 for negatives.
             return new Intl.NumberFormat("it-IT", {
-                style: "currency", currency: currency || "EUR",
+                style: "currency", currency: currency || "EUR", useGrouping: "always",
                 minimumFractionDigits: 2, maximumFractionDigits: maxDecimals || 2
-            }).format(value);
+            }).format(value).replace("-", "−");
         } catch (e) {
             return String(value);
         }

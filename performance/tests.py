@@ -3,6 +3,7 @@ from decimal import Decimal
 from unittest import mock
 
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
@@ -10,12 +11,14 @@ from django.utils import timezone
 from accounts.models import get_profile
 from common.currency import CurrencyConverter
 from common.market_data import Quote
-from wallet.models import CashAccount, Holding, Transaction
+from wallet.models import CashAccount, Holding, NetWorthSnapshot, Transaction
 from wallet.services import save_transaction
+from watchlist.models import WatchlistItem
 
 from .services import (
     RANGES,
     HoldingHistory,
+    PortfolioHistory,
     history_for_range,
     holding_history,
     holding_history_intraday,
@@ -523,8 +526,11 @@ class PerformanceViewTests(TestCase):
         CashAccount.objects.create(user=self.user, name="Bank", currency="EUR", opening_balance=D("500"))
         resp = self.client.get(reverse("performance:portfolio") + "?range=1m")
         self.assertContains(resp, 'id="portfolio-data"')
-        self.assertContains(resp, "500.00 EUR")
+        self.assertContains(resp, "500,00 €")
         self.assertContains(resp, 'aria-current="page">1M<')
+        self.assertContains(resp, 'data-stat="net_worth"')
+        self.assertContains(resp, "js/charts.js")
+        self.assertNotContains(resp, "new Chart(")
         self.assertEqual(resp.context["history"].days[-1], date.today())
         self.assertEqual(len(resp.context["history"].days), 31)
 
@@ -541,6 +547,8 @@ class PerformanceViewTests(TestCase):
                                      price=D("9"), date=date.today() - timedelta(days=2)))
         resp = self.client.get(reverse("performance:holding", args=[holding.pk]) + "?range=1m")
         self.assertContains(resp, 'id="holding-data"')
+        self.assertContains(resp, f'data-holding="{holding.pk}"')
+        self.assertContains(resp, 'data-stat="change_pct"')
         trades = resp.context["chart"]["trades"]
         self.assertEqual(trades, [{"x": (date.today() - timedelta(days=2)).isoformat(), "y": 9.0,
                                    "type": "buy", "quantity": 1.0}])
@@ -637,3 +645,68 @@ class ChartDataViewTests(TestCase):
     def test_requires_login(self, *mocks):
         self.client.logout()
         self.assertEqual(self.client.get(self.url(range="1m")).status_code, 302)
+
+
+@mock.patch("common.market_data.get_intraday_history", return_value=[])
+@mock.patch("common.market_data.get_quotes", return_value={})
+@mock.patch("dashboard.views.get_news_for_tickers", return_value=[])
+@mock.patch("dashboard.views.get_quotes", return_value={})
+@mock.patch("dashboard.views.history_for_range")
+class DashboardChartTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        self.user = User.objects.create_user("alice")
+        get_profile(self.user)
+        self.client.force_login(self.user)
+        CashAccount.objects.create(user=self.user, name="Bank", currency="EUR", opening_balance=D("100"))
+
+    def history(self):
+        return PortfolioHistory(
+            base_currency="EUR", start=day(0), end=day(1), days=[day(0), day(1)],
+            net_worth=[D("100"), D("110")], holdings_value=[D("0"), D("0")],
+            invested=[D("0"), D("0")], cash=[D("100"), D("110")])
+
+    def test_dashboard_chart_uses_portfolio_history(self, hist, *mocks):
+        hist.return_value = self.history()
+        resp = self.client.get(reverse("dashboard:home"))
+        hist.assert_called_once_with(self.user, "1m", earliest=mock.ANY)
+        self.assertContains(resp, 'id="networth-data"')
+        self.assertEqual(resp.context["chart"]["series"]["net_worth"], [100.0, 110.0])
+        self.assertContains(resp, "+10,00")  # change over the range, from history stats
+        self.assertContains(resp, 'data-stat="change"')
+        self.assertContains(resp, 'id="allocation-data"')
+        self.assertContains(resp, "js/charts.js")
+        self.assertEqual(NetWorthSnapshot.objects.filter(user=self.user).count(), 1)  # still recorded
+
+    def test_dashboard_range_param(self, hist, *mocks):
+        hist.return_value = self.history()
+        resp = self.client.get(reverse("dashboard:home") + "?range=7d")
+        hist.assert_called_once_with(self.user, "7d", earliest=mock.ANY)
+        self.assertContains(resp, 'aria-current="page">7D<')
+        self.assertEqual(resp.context["range_key"], "7d")
+
+    def test_dashboard_earliest_is_first_transaction(self, hist, *mocks):
+        hist.return_value = self.history()
+        holding = Holding.objects.create(user=self.user, ticker="AAPL", currency="EUR")
+        save_transaction(Transaction(user=self.user, tx_type="buy", holding=holding,
+                                     cash_account=CashAccount.objects.get(), quantity=D("1"),
+                                     price=D("5"), date=date(2024, 3, 4)))
+        self.client.get(reverse("dashboard:home"))
+        self.assertEqual(hist.call_args.kwargs["earliest"], date(2024, 3, 4))
+
+    def test_movers_ranked_and_deduped(self, hist, _dq, _news, _mq, _intraday):
+        hist.return_value = self.history()
+        WatchlistItem.objects.create(user=self.user, ticker="AAA")
+        WatchlistItem.objects.create(user=self.user, ticker="BBB")
+        q = lambda t, p: Quote(ticker=t, name=None, price=1.0, previous_close=None,  # noqa: E731
+                               currency="EUR", change=None, change_pct=p)
+        with mock.patch("dashboard.views.get_quotes", return_value={"AAA": q("AAA", 2.0), "BBB": q("BBB", -3.0)}):
+            resp = self.client.get(reverse("dashboard:home"))
+        self.assertEqual([m["ticker"] for m in resp.context["movers"]], ["AAA", "BBB"])
+        self.assertContains(resp, "BBB")
+
+    def test_empty_history_renders_empty_state(self, hist, *mocks):
+        hist.return_value = PortfolioHistory(base_currency="EUR", start=day(0), end=day(0))
+        resp = self.client.get(reverse("dashboard:home"))
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "Nothing to chart yet")
