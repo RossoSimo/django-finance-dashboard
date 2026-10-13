@@ -13,7 +13,7 @@
     <h5>Price ({{ history.price_currency }})</h5>
     {% if has_prices %}
     <canvas id="holdingChart" height="110" role="img"
-            aria-label="Price of {{ holding.ticker }} over the selected range{% if chart.avg_cost %} with your average cost{% endif %}; {{ history.trades|length }} buy/sell transaction(s) marked."></canvas>
+            aria-label="Price of {{ holding.ticker }} over the selected range{% if chart.series.avg_cost %} with your average cost{% endif %}; {{ history.trades|length }} buy/sell transaction(s) marked."></canvas>
     {% if not history.avg_cost_comparable %}
         <p class="small text-muted mt-2 mb-0">Your average cost is in {{ holding.currency }} and the price in {{ history.price_currency }}, so the cost line isn't drawn.</p>
     {% endif %}
@@ -50,10 +50,10 @@
     const gridColor = isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.05)";
     const tickColor = isDark ? "#9ca3af" : "#6c757d";
     const datasets = [
-        {type: "line", label: "Price", data: data.price, borderColor: "#4f8ef7", tension: 0.2, pointRadius: 0, borderWidth: 2, spanGaps: true},
+        {type: "line", label: "Price", data: data.series.price, borderColor: "#4f8ef7", tension: 0.2, pointRadius: 0, borderWidth: 2, spanGaps: true},
     ];
-    if (data.avg_cost.length) {
-        datasets.push({type: "line", label: "Your average cost", data: data.avg_cost, borderColor: "#94a3b8", borderDash: [6, 4], stepped: true, pointRadius: 0, borderWidth: 2});
+    if (data.series.avg_cost.length) {
+        datasets.push({type: "line", label: "Your average cost", data: data.series.avg_cost, borderColor: "#94a3b8", borderDash: [6, 4], stepped: true, pointRadius: 0, borderWidth: 2});
     }
     for (const [kind, colour, shape] of [["buy", "#22c55e", "triangle"], ["sell", "#ef4444", "rectRot"]]) {
         const points = data.trades.filter((t) => t.type === kind);

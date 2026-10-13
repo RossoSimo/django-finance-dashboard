@@ -562,3 +562,78 @@ class PerformanceViewTests(TestCase):
     def test_requires_login(self, *mocks):
         self.client.logout()
         self.assertEqual(self.client.get(reverse("performance:portfolio")).status_code, 302)
+
+
+@mock.patch("common.market_data.get_intraday_history", return_value=[])
+@mock.patch("common.market_data.get_quote", return_value=quote("AAPL", "EUR"))
+@mock.patch("common.market_data.get_quotes", return_value={})
+@mock.patch("common.market_data.get_price_history", return_value=[])
+@mock.patch("common.market_data.get_fx_rate", return_value=None)
+class ChartDataViewTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user("alice")
+        self.client.force_login(self.user)
+
+    def url(self, **params):
+        query = "&".join(f"{k}={v}" for k, v in params.items())
+        return reverse("performance:chart_data") + "?" + query
+
+    def test_portfolio_json(self, *mocks):
+        CashAccount.objects.create(user=self.user, name="Bank", currency="EUR", opening_balance=D("500"))
+        data = self.client.get(self.url(range="1m")).json()
+        self.assertEqual(data["range"], "1m")
+        self.assertFalse(data["intraday"])
+        self.assertIsNone(data["session_date"])
+        self.assertEqual(data["currency"], "EUR")
+        self.assertEqual(len(data["labels"]), 31)
+        self.assertEqual(data["series"]["net_worth"][-1], 500.0)
+        self.assertEqual(data["stats"]["net_worth"], "500,00 €")
+        self.assertEqual(data["stats"]["direction"], "flat")
+        self.assertEqual(set(data["stats"]), {"net_worth", "change", "change_pct", "direction",
+                                              "holdings_value", "invested", "unrealized_gain"})
+
+    def test_intraday_json(self, _fx, _history, _quotes, _quote, intraday):
+        holding = Holding.objects.create(user=self.user, ticker="AAPL", currency="EUR", opening_quantity=D("2"))
+        now = timezone.now()
+        intraday.return_value = [(now - timedelta(minutes=30), 10.0), (now - timedelta(minutes=10), 11.0)]
+        data = self.client.get(self.url(range="1d")).json()
+        self.assertTrue(data["intraday"])
+        self.assertIsNotNone(data["session_date"])
+        self.assertEqual(data["range"], "1d")
+        self.assertGreaterEqual(len(data["labels"]), 2)
+        self.assertIn("T", data["labels"][0])
+        self.assertEqual(data["stats"]["direction"], "up")
+        self.assertEqual(holding.ticker, "AAPL")
+
+    def test_holding_json_and_other_users_holding_404(self, _fx, history, *mocks):
+        history.return_value = [(date.today() - timedelta(days=3), 10.0)]
+        holding = Holding.objects.create(user=self.user, ticker="AAPL", currency="EUR")
+        save_transaction(Transaction(user=self.user, tx_type="buy", holding=holding, quantity=D("1"),
+                                     price=D("9"), date=date.today() - timedelta(days=2)))
+        data = self.client.get(self.url(range="1m", holding=holding.pk)).json()
+        self.assertEqual(set(data["series"]), {"price", "avg_cost"})
+        self.assertEqual(data["trades"], [{"x": (date.today() - timedelta(days=2)).isoformat(), "y": 9.0,
+                                           "type": "buy", "quantity": 1.0}])
+        self.assertEqual(set(data["stats"]), {"last_price", "change_pct", "direction"})
+        bob = User.objects.create_user("bob")
+        theirs = Holding.objects.create(user=bob, ticker="TSLA")
+        self.assertEqual(self.client.get(self.url(range="1m", holding=theirs.pk)).status_code, 404)
+        self.assertEqual(self.client.get(self.url(range="1m", holding="abc")).status_code, 404)
+
+    def test_intraday_trade_markers_snap_to_local_date(self, _fx, _history, _quotes, _quote, intraday):
+        holding = Holding.objects.create(user=self.user, ticker="AAPL", currency="EUR")
+        now = timezone.now()
+        intraday.return_value = [(now - timedelta(minutes=30), 10.0)]
+        save_transaction(Transaction(user=self.user, tx_type="buy", holding=holding, quantity=D("1"),
+                                     price=D("9"), date=timezone.localdate()))
+        data = self.client.get(self.url(range="1d", holding=holding.pk)).json()
+        self.assertEqual(len(data["trades"]), 1)
+        self.assertIn(data["trades"][0]["x"], data["labels"])
+
+    def test_unknown_range_falls_back(self, *mocks):
+        CashAccount.objects.create(user=self.user, name="Bank", currency="EUR", opening_balance=D("1"))
+        self.assertEqual(self.client.get(self.url(range="bogus")).json()["range"], "6m")
+
+    def test_requires_login(self, *mocks):
+        self.client.logout()
+        self.assertEqual(self.client.get(self.url(range="1m")).status_code, 302)

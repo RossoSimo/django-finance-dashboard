@@ -95,9 +95,9 @@
         data: {
             labels: data.labels,
             datasets: [
-                {label: "Net worth", data: data.net_worth, borderColor: "#8b5cf6", backgroundColor: "rgba(139,92,246,0.10)", fill: true, tension: 0.2, pointRadius: 0, borderWidth: 2},
-                {label: "Holdings value", data: data.holdings_value, borderColor: "#4f8ef7", tension: 0.2, pointRadius: 0, borderWidth: 2},
-                {label: "Invested", data: data.invested, borderColor: "#94a3b8", borderDash: [6, 4], stepped: true, pointRadius: 0, borderWidth: 2},
+                {label: "Net worth", data: data.series.net_worth, borderColor: "#8b5cf6", backgroundColor: "rgba(139,92,246,0.10)", fill: true, tension: 0.2, pointRadius: 0, borderWidth: 2},
+                {label: "Holdings value", data: data.series.holdings_value, borderColor: "#4f8ef7", tension: 0.2, pointRadius: 0, borderWidth: 2},
+                {label: "Invested", data: data.series.invested, borderColor: "#94a3b8", borderDash: [6, 4], stepped: true, pointRadius: 0, borderWidth: 2},
             ]
         },
         options: {

@@ -140,3 +140,6 @@ button.fd-navlink { width: 100%; background: none; border: 0; text-align: left; 
     .table-stack td.cell-primary::before, .table-stack td[data-label=""]::before { content: none; }
     .table-stack td.cell-figure { font-size: 1.05rem; font-weight: 600; }
 }
+
+.chart-box { position: relative; height: 280px; }
+@media (max-width: 575.98px) { .chart-box { height: 220px; } }
