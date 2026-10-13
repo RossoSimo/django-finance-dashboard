@@ -6,9 +6,9 @@
 <a href="{% url 'performance:portfolio' %}?range={{ range_key }}" class="small d-inline-block mb-2">&larr; Performance</a>
 {% include "components/_page_header.html" with title=holding.ticker subtitle=holding.name %}
 
-{% if has_prices %}
 <div class="d-flex justify-content-end mb-3">{% include "performance/_ranges.html" with holding_pk=holding.pk %}</div>
 
+{% if has_prices %}
 <div class="stat-row mb-4">
     <div class="card p-3">
         {% include "components/_stat.html" with label="Last price" value=chart.stats.last_price value_key="last_price" size="lg" live_change=True change_pct=chart.stats.change_pct direction=chart.stats.direction footnote="Change over the selected range" %}

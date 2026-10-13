@@ -65,6 +65,7 @@ def portfolio_payload(history, range_key=None):
         "holdings_value": money(last(history.holdings_value), history.base_currency),
         "invested": money(last(history.invested), history.base_currency),
         "unrealized_gain": signed_money(unrealized, history.base_currency),
+        "unrealized_direction": _direction(unrealized),
     }
     return payload
 

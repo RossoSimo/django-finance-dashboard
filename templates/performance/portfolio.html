@@ -12,8 +12,9 @@
 {% with names=history.missing_prices|join:", " %}{% include "components/_notice.html" with level="info" text="No price history for "|add:names|add:"; valued at average cost instead." %}{% endwith %}
 {% endif %}
 
-{% if has_data %}
 <div class="d-flex justify-content-end mb-3">{% include "performance/_ranges.html" %}</div>
+
+{% if has_data %}
 
 <div class="stat-row mb-4">
     <div class="card p-3">
@@ -26,7 +27,7 @@
         {% include "components/_stat.html" with label="Invested" value=chart.stats.invested value_key="invested" %}
     </div>
     <div class="card p-3">
-        {% include "components/_stat.html" with label="Unrealized gain/loss" value=chart.stats.unrealized_gain value_key="unrealized_gain" footnote="Current holdings, value minus cost." %}
+        {% include "components/_stat.html" with label="Unrealized gain/loss" value=chart.stats.unrealized_gain value_key="unrealized_gain" value_direction=chart.stats.unrealized_direction value_direction_key="unrealized_direction" footnote="Current holdings, value minus cost." %}
     </div>
 </div>
 

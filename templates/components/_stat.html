@@ -1,11 +1,12 @@
 {% comment %}label, value (pre-formatted), change, change_pct, currency, footnote, size ("lg"), stat_id.
 Live stats (updated by charts.js when the range changes): value_key adds data-stat to the value;
-live_change=True treats change/change_pct as pre-formatted strings (change may be omitted) (payload stats) and adds
-data-stat="change"/"change_pct" with data-direction (up/down/flat).{% endcomment %}
+value_direction ("up"/"down"/"flat", with value_direction_key naming the payload stat) puts an arrow
+before the value; live_change=True treats change/change_pct as pre-formatted strings (change may be
+omitted) with data-stat="change"/"change_pct", an arrow and data-direction taken from `direction`.{% endcomment %}
 <div class="stat{% if size == "lg" %} stat-lg{% endif %}"{% if stat_id %} id="{{ stat_id }}"{% endif %}>
     <div class="stat-label">{{ label }}</div>
-    <div class="stat-value figure"{% if value_key %} data-stat="{{ value_key }}"{% endif %}>{{ value }}</div>
-    {% if live_change %}<div class="stat-change">{% if change %}<span class="change change-live" data-stat="change" data-direction="{{ direction }}">{{ change }}</span> {% endif %}<span class="change change-live" data-stat="change_pct" data-direction="{{ direction }}">{{ change_pct }}</span></div>
+    <div class="stat-value figure">{% if value_direction %}<span class="change-live" data-arrow data-direction-key="{{ value_direction_key }}" data-direction="{{ value_direction }}" aria-hidden="true">{% if value_direction == "up" %}&#9650;{% elif value_direction == "down" %}&#9660;{% endif %}</span> {% endif %}<span{% if value_key %} data-stat="{{ value_key }}"{% endif %}{% if value_direction %} class="change-live" data-direction-key="{{ value_direction_key }}" data-direction="{{ value_direction }}"{% endif %}>{{ value }}</span></div>
+    {% if live_change %}<div class="stat-change"><span class="change change-live" data-arrow data-direction="{{ direction }}" aria-hidden="true">{% if direction == "up" %}&#9650;{% elif direction == "down" %}&#9660;{% endif %}</span> {% if change %}<span class="change change-live" data-stat="change" data-direction="{{ direction }}">{{ change }}</span> {% endif %}<span class="change change-live" data-stat="change_pct" data-direction="{{ direction }}">{{ change_pct }}</span></div>
     {% elif change is not None or change_pct is not None %}<div class="stat-change">{% include "components/_change.html" with value=change pct=change_pct currency=currency %}</div>{% endif %}
     {% if footnote %}<div class="stat-footnote small text-body-secondary">{{ footnote }}</div>{% endif %}
 </div>

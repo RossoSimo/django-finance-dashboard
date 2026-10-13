@@ -42,6 +42,11 @@ def _movers(watch_rows, holding_rows):
     return picked
 
 
+def _greeting(now):
+    hour = timezone.localtime(now).hour
+    return "Good morning" if hour < 12 else "Good afternoon" if hour < 18 else "Good evening"
+
+
 def home(request):
     check_alerts(request.user)
     summary = net_worth_summary(request.user)
@@ -75,6 +80,7 @@ def home(request):
     return render(request, "dashboard/home.html", {
         "summary": summary,
         "today": timezone.localdate(),
+        "greeting": _greeting(timezone.now()),
         "history": history,
         "chart": portfolio_payload(history, range_key),
         "has_chart": any(history.net_worth),

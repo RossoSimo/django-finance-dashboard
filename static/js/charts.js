@@ -240,10 +240,15 @@
 
         function showStats(payload) {
             var stats = payload.stats || {};
-            document.querySelectorAll("[data-stat]").forEach(function (el) {
-                var value = stats[el.getAttribute("data-stat")];
-                if (value !== undefined) { el.textContent = value; }
-                if (stats.direction) { el.setAttribute("data-direction", stats.direction); }
+            var arrows = { up: "▲", down: "▼", flat: "" };
+            document.querySelectorAll("[data-stat], [data-arrow]").forEach(function (el) {
+                var direction = stats[el.getAttribute("data-direction-key") || "direction"];
+                if (el.hasAttribute("data-stat")) {
+                    var value = stats[el.getAttribute("data-stat")];
+                    if (value !== undefined) { el.textContent = value; }
+                }
+                if (direction) { el.setAttribute("data-direction", direction); }
+                if (el.hasAttribute("data-arrow") && direction) { el.textContent = arrows[direction] || ""; }
             });
             if (typeof onStats === "function") { onStats(payload); }
         }

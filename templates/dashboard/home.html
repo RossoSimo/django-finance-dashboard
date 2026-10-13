@@ -4,7 +4,7 @@
 {% block page_title %}Dashboard{% endblock %}
 
 {% block content %}
-{% include "components/_page_header.html" with title="Dashboard" subtitle=today|date:"l, j F Y" %}
+{% include "components/_page_header.html" with title=greeting subtitle=today|date:"l, j F Y" %}
 
 {% include "wallet/_fx_warning.html" %}
 {% if history.missing_prices %}{% include "components/_notice.html" with level="info" text="Some prices are unavailable right now; those holdings are valued at average cost in the chart." %}{% endif %}

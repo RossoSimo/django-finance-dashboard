@@ -553,6 +553,29 @@ class PerformanceViewTests(TestCase):
         self.assertEqual(trades, [{"x": (date.today() - timedelta(days=2)).isoformat(), "y": 9.0,
                                    "type": "buy", "quantity": 1.0}])
 
+    @mock.patch("common.market_data.get_intraday_history", return_value=[])
+    def test_range_nav_stays_when_no_data(self, *mocks):
+        resp = self.client.get(reverse("performance:portfolio") + "?range=1d")
+        self.assertContains(resp, "Nothing to chart yet")
+        self.assertContains(resp, 'aria-current="page">1D<')
+
+    @mock.patch("common.market_data.get_intraday_history", return_value=[])
+    def test_holding_range_nav_stays_without_prices(self, *mocks):
+        holding = Holding.objects.create(user=self.user, ticker="AAPL", currency="EUR")
+        resp = self.client.get(reverse("performance:holding", args=[holding.pk]) + "?range=7d")
+        self.assertContains(resp, 'aria-current="page">7D<')
+        self.assertContains(resp, f'data-holding="{holding.pk}"')
+
+    def test_portfolio_gain_has_arrow(self, *mocks):
+        CashAccount.objects.create(user=self.user, name="Bank", currency="EUR", opening_balance=D("500"))
+        h = PortfolioHistory(base_currency="EUR", start=day(0), end=day(1), days=[day(0), day(1)],
+                             net_worth=[D("100"), D("110")], holdings_value=[D("50"), D("60")],
+                             invested=[D("50"), D("50")], cash=[D("50"), D("50")])
+        with mock.patch("performance.views.history_for_range", return_value=h):
+            resp = self.client.get(reverse("performance:portfolio"))
+        self.assertContains(resp, "&#9650;", count=2)  # net worth change and unrealized gain
+        self.assertEqual(resp.context["chart"]["stats"]["unrealized_direction"], "up")
+
     def test_trade_markers_snap_to_plotted_days(self, *mocks):
         holding = Holding.objects.create(user=self.user, ticker="AAPL", currency="EUR")
         old = date.today() - timedelta(days=900)
@@ -598,7 +621,8 @@ class ChartDataViewTests(TestCase):
         self.assertEqual(data["stats"]["net_worth"], "500,00 €")
         self.assertEqual(data["stats"]["direction"], "flat")
         self.assertEqual(set(data["stats"]), {"net_worth", "change", "change_pct", "direction",
-                                              "holdings_value", "invested", "unrealized_gain"})
+                                              "holdings_value", "invested", "unrealized_gain",
+                                              "unrealized_direction"})
 
     def test_intraday_json(self, _fx, _history, _quotes, _quote, intraday):
         holding = Holding.objects.create(user=self.user, ticker="AAPL", currency="EUR", opening_quantity=D("2"))
@@ -674,6 +698,8 @@ class DashboardChartTests(TestCase):
         self.assertEqual(resp.context["chart"]["series"]["net_worth"], [100.0, 110.0])
         self.assertContains(resp, "+10,00")  # change over the range, from history stats
         self.assertContains(resp, 'data-stat="change"')
+        self.assertContains(resp, "&#9650;")  # positive change carries an arrow, not just a sign
+        self.assertRegex(resp.content.decode(), r"Good (morning|afternoon|evening)")
         self.assertContains(resp, 'id="allocation-data"')
         self.assertContains(resp, "js/charts.js")
         self.assertEqual(NetWorthSnapshot.objects.filter(user=self.user).count(), 1)  # still recorded
