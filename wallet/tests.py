@@ -773,6 +773,17 @@ class CurrencyViewTests(TestCase):
         self.assertContains(resp, "left out of the totals")
         self.assertFalse(NetWorthSnapshot.objects.exists())
 
+    def test_dashboard_allocation_share_uses_comma_decimal(self, *mocks):
+        from dashboard import views as dashboard_views
+
+        real = dashboard_views.net_worth_summary(self.user)
+        fake = dict(real, allocation={"cash": D("100"), "stock": D("200")})
+        with mock.patch("dashboard.views.net_worth_summary", return_value=fake):
+            resp = self.client.get(reverse("dashboard:home"))
+        self.assertContains(resp, "33,3 %")
+        self.assertContains(resp, "66,7 %")
+        self.assertNotContains(resp, "33.3")
+
     def test_settings_page_changes_base_currency(self, *mocks):
         resp = self.client.post(reverse("settings"), {"base_currency": "USD"})
         self.assertRedirects(resp, reverse("settings"), fetch_redirect_response=False)

@@ -45,14 +45,14 @@
             {% if allocation_rows %}
             <div class="donut-box mb-3">
                 <canvas id="allocation-chart" role="img"
-                        aria-label="Doughnut chart of allocation:{% for a in allocation_rows %} {{ a.label }} {{ a.share|floatformat:0 }}%{% if not forloop.last %},{% endif %}{% endfor %}."></canvas>
+                        aria-label="Doughnut chart of allocation:{% for a in allocation_rows %} {{ a.label }} {{ a.share|num:0 }} %{% if not forloop.last %},{% endif %}{% endfor %}."></canvas>
                 <div class="donut-total"><span class="small text-body-secondary">Total</span><span class="figure">{{ summary.net_worth|money:summary.base_currency }}</span></div>
             </div>
             <ul class="list-unstyled mb-0 small">
                 {% for a in allocation_rows %}
                 <li class="d-flex justify-content-between gap-2 py-1">
                     <span><span class="d-inline-block rounded-circle me-2" style="width:.7rem;height:.7rem;background:{{ a.color }}" aria-hidden="true"></span>{{ a.label }}</span>
-                    <span class="figure">{{ a.share|floatformat:1 }} %</span>
+                    <span class="figure">{{ a.share|num:1 }} %</span>
                 </li>
                 {% endfor %}
             </ul>
