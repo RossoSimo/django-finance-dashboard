@@ -306,7 +306,13 @@ class ChatPageMarkupTests(TestCase):
     def test_chat_has_no_inline_style_or_script(self):
         resp = self.client.get(reverse("assistant:chat"))
         self.assertNotContains(resp, "<style>")
-        self.assertNotContains(resp, "suggested-prompt\").forEach")
+        import re
+        inline = re.findall(r"<script(?![^>]*src=)[^>]*>(.*?)</script>", resp.content.decode(), re.S)
+        # base.html has its own small inline snippets; chat.html adds none.
+        self.assertTrue(inline)
+        for body in inline:
+            self.assertNotIn("questionInput", body)
+            self.assertNotIn("suggested-prompt", body)
 
     def test_chat_form_is_busy_aware_and_log_is_live(self):
         resp = self.client.get(reverse("assistant:chat"))

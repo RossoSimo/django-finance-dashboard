@@ -62,12 +62,17 @@
     document.addEventListener("DOMContentLoaded", function () {
         var radios = document.querySelectorAll('input[type="radio"][name="theme"]');
         if (!radios.length) { return; }
-        var mode = storedTheme();
-        if (mode !== "light" && mode !== "dark") { mode = "system"; }
+        function syncRadios() {
+            var mode = storedTheme();
+            if (mode !== "light" && mode !== "dark") { mode = "system"; }
+            radios.forEach(function (radio) { radio.checked = radio.value === mode; });
+        }
+        syncRadios();
         radios.forEach(function (radio) {
-            radio.checked = radio.value === mode;
             radio.addEventListener("change", function () { if (radio.checked) { setTheme(radio.value); } });
         });
+        document.addEventListener("fd:themechange", syncRadios);
+        window.addEventListener("pageshow", syncRadios);
     });
 
     document.addEventListener("DOMContentLoaded", function () {
