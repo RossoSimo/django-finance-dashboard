@@ -1,0 +1,21 @@
+{% comment %}title, subtitle, primary_url/primary_label/primary_icon, menu=[{url,label,icon}]{% endcomment %}
+<div class="page-header d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+    <div class="me-auto">
+        <h1 class="h3 mb-0">{{ title }}</h1>
+        {% if subtitle %}<p class="text-body-secondary mb-0">{{ subtitle }}</p>{% endif %}
+    </div>
+    <div class="d-flex align-items-center gap-2">
+        {% if menu %}
+        <div class="d-none d-md-flex gap-2">
+            {% for item in menu %}<a class="btn btn-outline-secondary" href="{{ item.url }}">{% if item.icon %}<i class="bi bi-{{ item.icon }}" aria-hidden="true"></i> {% endif %}{{ item.label }}</a>{% endfor %}
+        </div>
+        <div class="dropdown d-md-none">
+            <button class="btn btn-outline-secondary" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="More actions"><i class="bi bi-three-dots" aria-hidden="true"></i></button>
+            <ul class="dropdown-menu dropdown-menu-end">
+                {% for item in menu %}<li><a class="dropdown-item" href="{{ item.url }}">{% if item.icon %}<i class="bi bi-{{ item.icon }}" aria-hidden="true"></i> {% endif %}{{ item.label }}</a></li>{% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+        {% if primary_url %}<a class="btn btn-primary" href="{{ primary_url }}">{% if primary_icon %}<i class="bi bi-{{ primary_icon }}" aria-hidden="true"></i> {% endif %}{{ primary_label }}</a>{% endif %}
+    </div>
+</div>

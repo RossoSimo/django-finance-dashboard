@@ -1,0 +1,7 @@
+{% comment %}label, value (pre-formatted), change, change_pct, currency, footnote, size ("lg"), stat_id{% endcomment %}
+<div class="stat{% if size == "lg" %} stat-lg{% endif %}"{% if stat_id %} id="{{ stat_id }}"{% endif %}>
+    <div class="stat-label">{{ label }}</div>
+    <div class="stat-value figure">{{ value }}</div>
+    {% if change is not None or change_pct is not None %}<div class="stat-change">{% include "components/_change.html" with value=change pct=change_pct currency=currency %}</div>{% endif %}
+    {% if footnote %}<div class="stat-footnote small text-body-secondary">{{ footnote }}</div>{% endif %}
+</div>

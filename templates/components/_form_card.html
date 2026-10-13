@@ -1,0 +1,11 @@
+{% comment %}form, submit_label, cancel_url{% endcomment %}
+<div class="card p-4 form-card">
+    <form method="post">
+        {% csrf_token %}
+        {% include "components/_form_fields.html" %}
+        <div class="form-actions sticky-actions d-flex gap-2">
+            <button type="submit" class="btn btn-primary">{{ submit_label|default:"Save" }}</button>
+            {% if cancel_url %}<a href="{{ cancel_url }}" class="btn btn-link">Cancel</a>{% endif %}
+        </div>
+    </form>
+</div>

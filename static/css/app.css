@@ -103,3 +103,40 @@ button.fd-navlink { width: 100%; background: none; border: 0; text-align: left; 
 @media (prefers-reduced-motion: reduce) {
     * { transition: none !important; animation: none !important; }
 }
+
+/* Shared components (Task 3) */
+.stat-row { display: flex; gap: 1rem; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: .25rem; }
+.stat-row > * { flex: 0 0 70%; scroll-snap-align: start; }
+@media (min-width: 768px) { .stat-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); overflow: visible; } .stat-row > * { flex: none; } }
+.stat-label { font-size: .8rem; color: var(--fd-muted); }
+.stat-value { font-size: 1.4rem; font-weight: 600; }
+.stat-lg .stat-value { font-size: 2.2rem; }
+.change { font-size: .85rem; font-weight: 500; white-space: nowrap; }
+.change-up { color: var(--fd-up, var(--bs-success)); }
+.change-down { color: var(--fd-down, var(--bs-danger)); }
+.change-flat { color: var(--fd-muted); }
+
+.chip-row { display: flex; gap: .5rem; overflow-x: auto; flex-wrap: nowrap; padding-bottom: .25rem; }
+.chip-row > * { flex: 0 0 auto; }
+
+.sticky-actions { padding-top: .5rem; }
+@media (max-width: 767.98px) {
+    .sticky-actions { position: sticky; bottom: calc(var(--fd-tabbar-height) + env(safe-area-inset-bottom)); background: var(--fd-surface); border-top: 1px solid var(--fd-border); margin: 1rem -1.5rem -1.5rem; padding: .6rem 1.5rem; }
+}
+
+.drop-zone { border: 2px dashed var(--fd-border); border-radius: .75rem; padding: 1.5rem; text-align: center; color: var(--fd-muted); transition: border-color .15s, background-color .15s; }
+.drop-zone.is-dragover { border-color: var(--fd-accent); background: color-mix(in srgb, var(--fd-accent) 8%, transparent); }
+.drop-zone .drop-zone-name { display: block; margin-top: .5rem; color: var(--bs-body-color); font-weight: 500; }
+
+.table-stack th.num, .table-stack td.num { text-align: right; }
+@media (min-width: 768px) { .table-stack thead th { position: sticky; top: 0; background: var(--fd-surface); } .table-stack tbody tr:hover { background: var(--fd-surface-2); } }
+@media (max-width: 767.98px) {
+    .table-stack thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+    .table-stack, .table-stack tbody, .table-stack tr, .table-stack td { display: block; width: 100%; }
+    .table-stack tr { background: var(--fd-surface); border: 1px solid var(--fd-border); border-radius: .75rem; padding: .6rem .9rem; margin-bottom: .75rem; }
+    .table-stack td { display: flex; justify-content: space-between; gap: 1rem; border: 0; padding: .25rem 0; text-align: right; }
+    .table-stack td::before { content: attr(data-label); color: var(--fd-muted); font-size: .8rem; text-align: left; }
+    .table-stack td.cell-primary { font-weight: 600; font-size: 1.05rem; text-align: left; }
+    .table-stack td.cell-primary::before, .table-stack td[data-label=""]::before { content: none; }
+    .table-stack td.cell-figure { font-size: 1.05rem; font-weight: 600; }
+}

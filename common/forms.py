@@ -18,6 +18,12 @@ class BootstrapFormMixin:
                 css_class = "form-control"
             existing = widget.attrs.get("class", "")
             widget.attrs["class"] = f"{existing} {css_class}".strip()
+            if isinstance(field, (forms.DecimalField, forms.FloatField)):
+                widget.attrs.setdefault("inputmode", "decimal")
+            elif isinstance(field, forms.DateField):
+                # Browsers require ISO values in <input type="date">.
+                widget.input_type = "date"
+                widget.format = "%Y-%m-%d"
 
 
 class UserOwnedFormMixin:

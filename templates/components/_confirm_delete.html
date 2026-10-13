@@ -1,0 +1,10 @@
+{% comment %}object_label, consequence, cancel_url{% endcomment %}
+<div class="card p-4 form-card">
+    <h1 class="h4">Delete {{ object_label }}?</h1>
+    <p>{{ consequence }}</p>
+    <form method="post" class="d-flex gap-2">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-danger">Delete</button>
+        <a href="{{ cancel_url }}" class="btn btn-link">Cancel</a>
+    </form>
+</div>

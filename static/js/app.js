@@ -53,3 +53,82 @@
         }
     });
 })();
+
+/* Confirm dialog, busy buttons, drop zone. */
+(function () {
+    "use strict";
+
+    var pendingForm = null;
+
+    document.addEventListener("submit", function (event) {
+        var form = event.target;
+        if (!(form instanceof HTMLFormElement)) { return; }
+        var modalEl = document.getElementById("confirm-modal");
+        if (form.dataset.confirm && !form.dataset.confirmed && modalEl && window.bootstrap) {
+            event.preventDefault();
+            pendingForm = form;
+            document.getElementById("confirm-modal-text").textContent = form.dataset.confirm;
+            window.bootstrap.Modal.getOrCreateInstance(modalEl).show();
+            return;
+        }
+        if (form.dataset.busy) {
+            if (form.dataset.busyActive) { event.preventDefault(); return; }
+            form.dataset.busyActive = "1";
+            var btn = form.querySelector('[type="submit"]');
+            if (btn) {
+                // Disable after the browser has collected the submitter's value.
+                setTimeout(function () {
+                    btn.disabled = true;
+                    btn.textContent = "";
+                    var spinner = document.createElement("span");
+                    spinner.className = "spinner-border spinner-border-sm me-2";
+                    spinner.setAttribute("aria-hidden", "true");
+                    btn.appendChild(spinner);
+                    btn.appendChild(document.createTextNode(form.dataset.busy));
+                }, 0);
+            }
+        }
+    });
+
+    document.addEventListener("click", function (event) {
+        if (!event.target.closest("#confirm-modal-ok") || !pendingForm) { return; }
+        var form = pendingForm;
+        pendingForm = null;
+        form.dataset.confirmed = "1";
+        window.bootstrap.Modal.getInstance(document.getElementById("confirm-modal")).hide();
+        if (form.requestSubmit) { form.requestSubmit(); } else { form.submit(); }
+    });
+
+    document.addEventListener("DOMContentLoaded", function () {
+        var target = document.querySelector("[data-autofocus]");
+        if (target) { target.focus(); }
+
+        document.querySelectorAll(".drop-zone").forEach(function (zone) {
+            var input = zone.querySelector('input[type="file"]');
+            if (!input) { return; }
+            var label = zone.querySelector(".drop-zone-name");
+            if (!label) {
+                label = document.createElement("span");
+                label.className = "drop-zone-name";
+                zone.appendChild(label);
+            }
+            function showName() {
+                label.textContent = input.files && input.files.length ? input.files[0].name : "";
+            }
+            ["dragenter", "dragover"].forEach(function (name) {
+                zone.addEventListener(name, function (e) { e.preventDefault(); zone.classList.add("is-dragover"); });
+            });
+            ["dragleave", "drop"].forEach(function (name) {
+                zone.addEventListener(name, function () { zone.classList.remove("is-dragover"); });
+            });
+            zone.addEventListener("drop", function (e) {
+                e.preventDefault();
+                if (e.dataTransfer && e.dataTransfer.files.length) {
+                    input.files = e.dataTransfer.files;
+                    showName();
+                }
+            });
+            input.addEventListener("change", showName);
+        });
+    });
+})();

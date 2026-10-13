@@ -1,0 +1,1 @@
+<span class="change {{ cls }}">{% if arrow %}<span aria-hidden="true">{{ arrow }}</span> {% endif %}{% if value is not None %}{{ value|signed_money:currency }}{% endif %}{% if pct is not None %}{% if value is not None %} ({{ pct|pct }}){% else %}{{ pct|pct }}{% endif %}{% endif %}</span>

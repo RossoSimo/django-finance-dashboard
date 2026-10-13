@@ -79,3 +79,12 @@ def pct(value) -> str:
     if value is None:
         return DASH
     return format_number(value, 2, signed=True) + "\u00a0%"
+
+
+@register.filter
+def invalid_aware(bound_field):
+    """Render a bound field, adding Bootstrap's `is-invalid` when it has errors."""
+    if not bound_field.errors:
+        return bound_field
+    existing = bound_field.field.widget.attrs.get("class", "")
+    return bound_field.as_widget(attrs={"class": f"{existing} is-invalid".strip()})

@@ -1,0 +1,2 @@
+{% comment %}level (warning|info|danger), text (plain){% endcomment %}
+<div class="alert alert-{{ level|default:"info" }} notice py-2 px-3 small" role="{% if level == "danger" %}alert{% else %}status{% endif %}">{{ text }}</div>

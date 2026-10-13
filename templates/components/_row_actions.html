@@ -1,0 +1,18 @@
+{% comment %}label, items=[{url,label,icon,post,confirm,danger}]{% endcomment %}
+<div class="dropdown row-actions">
+    <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="{{ label }}"><i class="bi bi-three-dots" aria-hidden="true"></i></button>
+    <ul class="dropdown-menu dropdown-menu-end">
+        {% for item in items %}
+        <li>
+            {% if item.post %}
+            <form method="post" action="{{ item.url }}" class="m-0"{% if item.confirm %} data-confirm="{{ item.confirm }}"{% endif %}>
+                {% csrf_token %}
+                <button type="submit" class="dropdown-item{% if item.danger %} text-danger{% endif %}">{% if item.icon %}<i class="bi bi-{{ item.icon }}" aria-hidden="true"></i> {% endif %}{{ item.label }}</button>
+            </form>
+            {% else %}
+            <a class="dropdown-item{% if item.danger %} text-danger{% endif %}" href="{{ item.url }}">{% if item.icon %}<i class="bi bi-{{ item.icon }}" aria-hidden="true"></i> {% endif %}{{ item.label }}</a>
+            {% endif %}
+        </li>
+        {% endfor %}
+    </ul>
+</div>

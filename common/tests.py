@@ -69,3 +69,112 @@ class FormatTests(TestCase):
 
     def test_template_builtin(self):
         self.assertEqual(Template("{{ v|money:'EUR' }}").render(Context({"v": 5})), "5,00\u00a0€")
+
+
+class FormMixinTests(TestCase):
+    def test_decimal_and_date_widgets(self):
+        from django.contrib.auth.models import User
+
+        from wallet.forms import TransactionForm
+
+        form = TransactionForm(user=User.objects.create_user("u"))
+        self.assertEqual(form.fields["amount"].widget.attrs["inputmode"], "decimal")
+        self.assertEqual(form.fields["date"].widget.input_type, "date")
+        self.assertEqual(form.fields["date"].widget.format, "%Y-%m-%d")
+
+
+class ComponentTests(TestCase):
+    def test_change_has_arrow_sign_and_text(self):
+        from django.template.loader import render_to_string
+
+        html = render_to_string(
+            "components/_change.html", {"value": Decimal("-12.3"), "pct": Decimal("-1.1"), "currency": "EUR"}
+        )
+        self.assertIn("▼", html)
+        self.assertIn("−12,30 €", html)
+        self.assertIn("change-down", html)
+        up = render_to_string("components/_change.html", {"value": Decimal("12.3"), "pct": Decimal("2.35"), "currency": "EUR"})
+        self.assertIn("▲", up)
+        self.assertIn("change-up", up)
+        flat = render_to_string("components/_change.html", {"value": Decimal("0"), "pct": None, "currency": "EUR"})
+        self.assertIn("change-flat", flat)
+        self.assertNotIn("▲", flat)
+        self.assertNotIn("▼", flat)
+
+    def test_row_actions_post_items_have_csrf_and_confirm(self):
+        from django.template.loader import render_to_string
+        from django.test import RequestFactory
+
+        request = RequestFactory().get("/")
+        html = render_to_string(
+            "components/_row_actions.html",
+            {
+                "label": "Actions for AAPL",
+                "items": [
+                    {"url": "/edit/", "label": "Edit AAPL", "icon": "pencil"},
+                    {"url": "/x/", "label": "Remove AAPL", "post": True, "confirm": "Remove AAPL?", "danger": True},
+                ],
+            },
+            request=request,
+        )
+        self.assertIn('name="csrfmiddlewaretoken"', html)
+        self.assertIn('data-confirm="Remove AAPL?"', html)
+        self.assertIn('aria-label="Actions for AAPL"', html)
+        self.assertIn('<a class="dropdown-item"', html)
+        self.assertIn("text-danger", html)
+
+    def test_form_fields_marks_errors(self):
+        from django import forms
+        from django.template.loader import render_to_string
+
+        class F(BootstrapFormMixinForTest):
+            name = forms.CharField()
+            agree = forms.BooleanField()
+
+        html = render_to_string("components/_form_fields.html", {"form": F(data={})})
+        self.assertIn("is-invalid", html)
+        self.assertIn("invalid-feedback", html)
+        self.assertIn("form-switch", html)
+
+    def test_form_fields_non_field_errors_focusable(self):
+        from django import forms
+        from django.template.loader import render_to_string
+
+        class F(forms.Form):
+            def clean(self):
+                raise forms.ValidationError("Broken")
+
+        html = render_to_string("components/_form_fields.html", {"form": F(data={})})
+        self.assertIn('tabindex="-1"', html)
+        self.assertIn("data-autofocus", html)
+        self.assertIn("Broken", html)
+
+    def test_simple_components_render(self):
+        from django.template.loader import render_to_string
+
+        header = render_to_string(
+            "components/_page_header.html",
+            {"title": "Wallet", "primary_url": "/new/", "primary_label": "Add", "menu": [{"url": "/i/", "label": "Import", "icon": "upload"}]},
+        )
+        self.assertIn("Wallet", header)
+        self.assertIn("Import", header)
+        stat = render_to_string(
+            "components/_stat.html",
+            {"label": "Net worth", "value": "1.000,00 €", "change": Decimal("5"), "change_pct": Decimal("1"), "currency": "EUR", "stat_id": "nw"},
+        )
+        self.assertIn('id="nw"', stat)
+        self.assertIn("change-up", stat)
+        empty = render_to_string("components/_empty.html", {"icon": "wallet2", "text": "Nothing yet", "action_url": "/a/", "action_label": "Add one"})
+        self.assertIn("Add one", empty)
+        notice = render_to_string("components/_notice.html", {"level": "warning", "text": "<b>x</b>"})
+        self.assertIn("alert-warning", notice)
+        self.assertIn("&lt;b&gt;", notice)
+
+
+from django import forms as _forms  # noqa: E402
+
+from common.forms import BootstrapFormMixin  # noqa: E402
+
+
+class BootstrapFormMixinForTest(BootstrapFormMixin, _forms.Form):
+    pass
