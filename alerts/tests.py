@@ -248,6 +248,22 @@ class AlertViewTests(TestCase):
             page = self.client.get(reverse("alerts:home") + "?tab=triggered")
         self.assertContains(page, ">Seen<")
 
+    def test_delete_from_watching_stays_on_watching(self, *mocks):
+        self.triggered_alert()
+        watching = PriceAlert.objects.create(user=self.user, ticker="MSFT", direction="above", target_price=D("1"))
+        with mock.patch("common.market_data.get_quotes", return_value={}):
+            page = self.client.get(reverse("alerts:home"))  # defaults to Triggered
+            page = self.client.get(reverse("alerts:home") + "?tab=watching")
+        url = [i["url"] for a in page.context["active"] for i in a.delete_menu][0]
+        resp = self.client.post(url)
+        self.assertRedirects(resp, reverse("alerts:home") + "?tab=watching", fetch_redirect_response=False)
+        self.assertFalse(PriceAlert.objects.filter(pk=watching.pk).exists())
+
+    def test_rearm_from_triggered_stays_on_triggered(self, *mocks):
+        alert = self.triggered_alert()
+        resp = self.client.post(reverse("alerts:rearm", args=[alert.pk]), {"next": reverse("alerts:home") + "?tab=triggered"})
+        self.assertRedirects(resp, reverse("alerts:home") + "?tab=triggered", fetch_redirect_response=False)
+
     def test_dismiss_ignores_unsafe_next_url(self, *mocks):
         self.triggered_alert()
         resp = self.client.post(reverse("alerts:dismiss_all"), {"next": "https://evil.example/"})

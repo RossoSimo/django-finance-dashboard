@@ -1,6 +1,7 @@
 from django.contrib import messages
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from urllib.parse import quote
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
@@ -25,14 +26,15 @@ def _price(value, currency):
     return money(value, currency) if currency else num(value)
 
 
-def _decorate(alerts):
+def _decorate(alerts, tab):
+    back = f"{reverse('alerts:home')}?tab={tab}"
     out = []
     for alert in alerts:
         alert.target_text = _price(alert.target_price, alert.currency)
         alert.last_text = _price(alert.last_price, alert.currency)
         alert.hit_text = _price(alert.triggered_price, alert.currency)
         alert.delete_menu = [
-            {"url": reverse("alerts:delete", args=[alert.pk]), "label": "Delete", "icon": "trash",
+            {"url": f"{reverse('alerts:delete', args=[alert.pk])}?next={quote(back)}", "label": "Delete", "icon": "trash",
              "post": True, "confirm": f"Delete the alert for {alert.ticker}?", "danger": True},
         ]
         out.append(alert)
@@ -42,8 +44,8 @@ def _decorate(alerts):
 def alerts_home(request):
     check_alerts(request.user)
     alerts = PriceAlert.objects.filter(user=request.user)
-    active = _decorate(alerts.filter(is_active=True).order_by("ticker"))
-    triggered = _decorate(alerts.filter(is_active=False).order_by("-triggered_at"))
+    active = _decorate(alerts.filter(is_active=True).order_by("ticker"), "watching")
+    triggered = _decorate(alerts.filter(is_active=False).order_by("-triggered_at"), "triggered")
     tab = request.GET.get("tab")
     if tab not in ("watching", "triggered"):
         tab = "triggered" if any(a.is_unseen for a in triggered) else "watching"
@@ -80,7 +82,7 @@ def dismiss_all(request):
 def rearm_alert(request, pk):
     alert = rearm(get_object_or_404(PriceAlert, pk=pk, user=request.user))
     messages.success(request, f"Re-armed: {alert}.")
-    return redirect("alerts:home")
+    return _back(request)
 
 
 @require_POST
@@ -88,4 +90,4 @@ def delete_alert(request, pk):
     alert = get_object_or_404(PriceAlert, pk=pk, user=request.user)
     alert.delete()
     messages.success(request, f"Deleted alert: {alert}.")
-    return redirect("alerts:home")
+    return _back(request)

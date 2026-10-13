@@ -40,6 +40,7 @@
                     <button class="btn btn-sm btn-outline-secondary" type="submit" aria-label="Dismiss alert for {{ alert.ticker }}">Dismiss</button></form>
                 {% endif %}
                 <form method="post" action="{% url 'alerts:rearm' alert.pk %}" class="m-0">{% csrf_token %}
+                    <input type="hidden" name="next" value="{% url 'alerts:home' %}?tab=triggered">
                     <button class="btn btn-sm btn-outline-primary" type="submit" aria-label="Re-arm alert for {{ alert.ticker }}">Re-arm</button></form>
                 {% include "components/_row_actions.html" with label="Actions for "|add:alert.ticker|add:" alert" items=alert.delete_menu %}
             </div>
