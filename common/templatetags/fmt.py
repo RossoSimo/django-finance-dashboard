@@ -56,7 +56,7 @@ def _money(value, currency, signed: bool) -> str:
     amount, major = normalize(_to_decimal(value), currency)
     text = format_number(amount, 2, signed)
     symbol = currency_symbol(major)
-    return f"{text} {symbol}" if symbol else text
+    return f"{text}\u00a0{symbol}" if symbol else text
 
 
 @register.filter
@@ -78,4 +78,4 @@ def num(value, decimals=None) -> str:
 def pct(value) -> str:
     if value is None:
         return DASH
-    return format_number(value, 2, signed=True) + " %"
+    return format_number(value, 2, signed=True) + "\u00a0%"
