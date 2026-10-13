@@ -52,6 +52,12 @@ Settings from env: `SECRET_KEY`, `DEBUG`, `ALLOWED_HOSTS`, `SIGNUP_ENABLED`,
 | `assistant/` | Ollama client, screenshot extraction, `market_check.py` (match rows to real listings), chat |
 | `common/market_data.py` | every Yahoo call: `get_quote(s)`, `get_fx_rate`, `get_price_history`, `search_securities`, news. Cached; fails soft (returns None/[]) |
 | `common/currency.py` | `normalize()` for minor units (GBp→GBP), `CurrencyConverter` |
+| `common/templatetags/fmt.py` | template builtins `money`, `signed_money`, `num`, `pct`, `currency_symbol` (Italian format `1.234,56 €`, `None` → "—"), `invalid_aware` |
+| `common/context_processors.py` | `nav`: active nav item from the URL |
+| `common/testing.py` | test helpers (`empty_dashboard_history`; dashboard tests patch `dashboard.views.history_for_range` with it) |
+| `templates/components/`, `templates/base.html`, `base_auth.html` | shared partials (`_page_header`, `_stat`, `_change`, `_empty`, `_notice`, `_row_actions`, `_form_fields`, `_form_card`, `_confirm_delete`, `_nav_items`); sidebar ≥992 px, mobile tab bar + More sheet, toasts, confirm modal |
+| `static/css/app.css`, `static/js/app.js`, `static/js/charts.js` | design tokens `--fd-*`, `.table-stack`, `.stat-row`, `.chip-row`, `.drop-zone`, `.sticky-actions`, `.chart-box`; `FD.setTheme`, `data-confirm`, `data-busy`; `FD.charts.line/doughnut/bindRanges` |
+| `performance/payloads.py` | `portfolio_payload`, `holding_payload` (JSON for `performance:chart_data`, `/performance/chart-data/?range=…[&holding=pk]`) |
 | `common/forms.py` | `BootstrapFormMixin`, `UserOwnedFormMixin` (sets user, scopes choices, per-user ticker uniqueness) |
 
 URL prefixes: `/` dashboard, `/wallet/`, `/watchlist/`, `/news/`, `/alerts/`,
@@ -87,7 +93,7 @@ URL prefixes: `/` dashboard, `/wallet/`, `/watchlist/`, `/news/`, `/alerts/`,
 - Migrations: data migrations must be reversible or `noop`-reversed and must
   preserve data (e.g. watchlist targets → alerts). **Back up `db.sqlite3` before
   migrating the real database.**
-- Templates: no colour-only signals (badges carry text), labels on inputs,
+- Templates: use `money`/`signed_money`/`num`/`pct` from `fmt`, never `floatformat` for money or quantities. Tables use `.table-stack` + `data-label` on cells. Destructive POSTs use `data-confirm`, long ones `data-busy`. No `<style>` blocks (put CSS in `app.css`). No colour-only signals (badges carry text), labels on inputs,
   `json_script` for chart data, mobile-friendly tables (`table-responsive`).
 - Commits: one feature per commit on a `feature/*` branch, fast-forward into
   `main`, then push. Commit messages explain *why*.
@@ -121,8 +127,14 @@ Done (in git order):
 8. Performance charts (portfolio + per holding).
 9. Screenshot import rebuilt: transcribe-only schema + market cross-check;
    fixed thinking-model failure (branch `feature/better-screenshot-import`, pending merge).
+10. UI redesign (sidebar/tab-bar shell, shared components, Italian number formatting, light/dark theme) and
+    intraday charts: ranges 1D·7D·1M·3M·6M·YTD·1Y·Max via `get_intraday_history` / `history_for_range`;
+    dashboard net-worth chart now from `history_for_range` (branch `feature/ui-redesign`).
 
 Known limitations:
+- Intraday FX (1D/7D charts) uses the current rate for the whole range.
+- On 1D/7D a holding without bars uses the last daily close strictly before the point's date.
+- 1D for 24h instruments after local midnight shows only the hours since midnight.
 - Cost basis is converted at today's FX rate (gains exclude currency moves).
 - Opening quantities/balances have no date (charts treat them as held from the start).
 - Stock splits are not adjusted for.
