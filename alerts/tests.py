@@ -198,13 +198,55 @@ class AlertViewTests(TestCase):
         with mock.patch("common.market_data.get_quotes", return_value={}):
             page = self.client.get(reverse("wallet:transaction_list"))
         self.assertContains(page, "Price alert triggered")
-        self.assertContains(page, "hit 101 USD")
+        self.assertContains(page, "hit 101,00 $")
         self.assertContains(page, '<span class="visually-hidden"> triggered</span>', html=False)
 
         resp = self.client.post(reverse("alerts:dismiss_all"), {"next": reverse("wallet:transaction_list")})
         self.assertRedirects(resp, reverse("wallet:transaction_list"), fetch_redirect_response=False)
         page = self.client.get(reverse("wallet:transaction_list"))
         self.assertNotContains(page, "Price alert triggered")
+
+    def test_alert_reads_as_sentence(self, *mocks):
+        PriceAlert.objects.create(user=self.user, ticker="AAPL", direction="above", target_price=D("230"),
+                                  currency="USD", last_price=D("228.10"))
+        with mock.patch("common.market_data.get_quotes", return_value={}):
+            page = self.client.get(reverse("alerts:home"))
+        self.assertContains(page, "AAPL</strong> above <strong>230,00 $</strong>")
+        self.assertContains(page, "last 228,10 $")
+
+    def test_unchecked_alert_has_no_currency_symbol(self, *mocks):
+        PriceAlert.objects.create(user=self.user, ticker="AAPL", direction="below", target_price=D("230"))
+        with mock.patch("common.market_data.get_quotes", return_value={}):
+            page = self.client.get(reverse("alerts:home"))
+        self.assertContains(page, "AAPL</strong> below <strong>230</strong>")
+        self.assertContains(page, "not checked yet")
+
+    def test_triggered_tab_count_and_default_tab(self, *mocks):
+        self.triggered_alert()
+        PriceAlert.objects.create(user=self.user, ticker="MSFT", direction="above", target_price=D("1"))
+        with mock.patch("common.market_data.get_quotes", return_value={}):
+            page = self.client.get(reverse("alerts:home"))
+        self.assertContains(page, 'Triggered <span class="badge')
+        self.assertContains(page, ">1<")
+        self.assertEqual(page.context["tab"], "triggered")  # unseen alerts open the second tab
+        self.assertContains(page, ">New<")
+        self.assertContains(page, "Re-arm")
+        with mock.patch("common.market_data.get_quotes", return_value={}):
+            page = self.client.get(reverse("alerts:home") + "?tab=watching")
+        self.assertEqual(page.context["tab"], "watching")
+        self.assertContains(page, "MSFT</strong>")
+        self.assertNotContains(page, "Re-arm")
+
+    def test_seen_triggered_alerts_default_to_watching(self, *mocks):
+        alert = self.triggered_alert()
+        alert.dismissed_at = alert.triggered_at
+        alert.save()
+        with mock.patch("common.market_data.get_quotes", return_value={}):
+            page = self.client.get(reverse("alerts:home"))
+        self.assertEqual(page.context["tab"], "watching")
+        with mock.patch("common.market_data.get_quotes", return_value={}):
+            page = self.client.get(reverse("alerts:home") + "?tab=triggered")
+        self.assertContains(page, ">Seen<")
 
     def test_dismiss_ignores_unsafe_next_url(self, *mocks):
         self.triggered_alert()

@@ -1,5 +1,7 @@
 from django.contrib import messages
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
+from django.utils.http import urlencode
 
 from alerts.services import check_alerts
 from common.market_data import get_quotes
@@ -15,7 +17,18 @@ def watchlist_home(request):
     rows = []
     for item in items:
         quote = quotes.get(item.ticker.upper())
-        rows.append({"item": item, "quote": quote})
+        ticker = item.ticker
+        news_url = f"{reverse('newsfeed:home')}?{urlencode({'ticker': ticker})}"
+        rows.append({
+            "item": item, "quote": quote, "news_url": news_url,
+            "menu": [
+                {"url": news_url, "label": "News", "icon": "newspaper"},
+                {"url": f"{reverse('alerts:add')}?{urlencode({'ticker': ticker})}", "label": "Alert",
+                 "icon": "bell"},
+                {"url": reverse("watchlist:remove", args=[item.pk]), "label": "Remove", "icon": "trash",
+                 "post": True, "confirm": f"Remove {ticker}?", "danger": True},
+            ],
+        })
     return render(request, "watchlist/watchlist_home.html", {"rows": rows})
 
 

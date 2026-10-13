@@ -97,3 +97,37 @@ class PageSmokeTests(TestCase):
             follow=True,
         )
         self.assertContains(resp, 'class="toast')
+
+
+class WatchlistNewsPageTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        self.user = get_user_model().objects.create_user("alice", password="pw-12345-xyz")
+        self.client.force_login(self.user)
+
+    def test_news_items_show_relative_time(self):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        from common.market_data import NewsItem
+        items = [
+            NewsItem("AAPL", "Apple up", "Wire", "https://example.com/a", timezone.now() - timedelta(hours=2, seconds=30)),
+            NewsItem("AAPL", "Undated", None, "https://example.com/b", None),
+        ]
+        with mock.patch("newsfeed.views.get_news_for_tickers", return_value=items):
+            page = self.client.get(reverse("newsfeed:home"))
+        self.assertContains(page, "2 hours ago")
+        self.assertContains(page, 'rel="noopener"')
+        self.assertContains(page, "Unknown source")
+
+    def test_watchlist_rows_show_formatted_price_and_menu(self):
+        from common.market_data import Quote
+        WatchlistItem.objects.create(user=self.user, ticker="MSFT")
+        q = {"MSFT": Quote("MSFT", "Microsoft", 1234.5, 1200.0, "USD", 34.5, 2.875)}
+        with mock.patch("watchlist.views.get_quotes", return_value=q):
+            page = self.client.get(reverse("watchlist:home"))
+        self.assertContains(page, "1.234,50 $")
+        self.assertContains(page, "Actions for MSFT")
+        self.assertContains(page, 'data-confirm="Remove MSFT?"')
+        self.assertContains(page, "table-responsive")

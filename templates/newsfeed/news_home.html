@@ -1,33 +1,30 @@
 {% extends "base.html" %}
 {% block title %}News - FinanceDash{% endblock %}
+{% block page_title %}News{% endblock %}
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <h3 class="mb-0">News{% if active_ticker %} — {{ active_ticker }}{% endif %}</h3>
-</div>
+{% include "components/_page_header.html" with title="News" subtitle=active_ticker %}
 
-<div class="mb-3">
-    <a href="{% url 'newsfeed:home' %}" class="btn btn-sm {% if not active_ticker %}btn-primary{% else %}btn-outline-secondary{% endif %}">All</a>
+<div class="chip-row mb-3" role="group" aria-label="Filter by ticker">
+    <a href="{% url 'newsfeed:home' %}" class="btn btn-sm {% if not active_ticker %}btn-primary{% else %}btn-outline-secondary{% endif %}"{% if not active_ticker %} aria-current="true"{% endif %}>All</a>
     {% for t in tickers %}
-        <a href="{% url 'newsfeed:home' %}?ticker={{ t }}" class="btn btn-sm {% if t == active_ticker %}btn-primary{% else %}btn-outline-secondary{% endif %}">{{ t }}</a>
+        <a href="{% url 'newsfeed:home' %}?ticker={{ t|urlencode }}" class="btn btn-sm {% if t == active_ticker %}btn-primary{% else %}btn-outline-secondary{% endif %}"{% if t == active_ticker %} aria-current="true"{% endif %}>{{ t }}</a>
     {% endfor %}
 </div>
 
-<div class="card p-3">
+<div class="card p-2">
     {% if items %}
-        <ul class="list-unstyled mb-0">
+        <ul class="news-list list-unstyled mb-0">
         {% for item in items %}
-            <li class="mb-3 pb-3 border-bottom">
-                <a href="{{ item.link }}" target="_blank" rel="noopener">{{ item.title }}</a>
-                <div class="small text-muted">
-                    {% if item.ticker %}{{ item.ticker }} · {% endif %}
-                    {{ item.publisher|default:"Unknown source" }}
-                    {% if item.published %} · {{ item.published }}{% endif %}
-                </div>
+            <li>
+                <a class="news-item" href="{{ item.link }}" target="_blank" rel="noopener">
+                    <span class="news-title">{{ item.title }}</span>
+                    <span class="small text-body-secondary">{{ item.publisher|default:"Unknown source" }}{% if item.ticker %} · {{ item.ticker }}{% endif %}{% if item.published %} · {{ item.published|timesince }} ago{% endif %}<span class="visually-hidden"> (opens in a new tab)</span></span>
+                </a>
             </li>
         {% endfor %}
         </ul>
     {% else %}
-        <p class="text-muted mb-0">No news found. Add holdings or watchlist tickers to see relevant news here.</p>
+        {% include "components/_empty.html" with icon="newspaper" text="No news found. Add holdings or watchlist tickers to see relevant news here." %}
     {% endif %}
 </div>
 {% endblock %}

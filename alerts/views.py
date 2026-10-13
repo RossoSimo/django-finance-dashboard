@@ -1,7 +1,10 @@
 from django.contrib import messages
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
+
+from common.templatetags.fmt import money, num
 
 from .forms import PriceAlertForm
 from .models import PriceAlert
@@ -15,12 +18,37 @@ def _back(request, default="alerts:home"):
     return redirect(default)
 
 
+def _price(value, currency):
+    """Formatted price; no symbol until the alert has been checked (currency unknown)."""
+    if value is None:
+        return "\u2014"
+    return money(value, currency) if currency else num(value)
+
+
+def _decorate(alerts):
+    out = []
+    for alert in alerts:
+        alert.target_text = _price(alert.target_price, alert.currency)
+        alert.last_text = _price(alert.last_price, alert.currency)
+        alert.hit_text = _price(alert.triggered_price, alert.currency)
+        alert.delete_menu = [
+            {"url": reverse("alerts:delete", args=[alert.pk]), "label": "Delete", "icon": "trash",
+             "post": True, "confirm": f"Delete the alert for {alert.ticker}?", "danger": True},
+        ]
+        out.append(alert)
+    return out
+
+
 def alerts_home(request):
     check_alerts(request.user)
     alerts = PriceAlert.objects.filter(user=request.user)
+    active = _decorate(alerts.filter(is_active=True).order_by("ticker"))
+    triggered = _decorate(alerts.filter(is_active=False).order_by("-triggered_at"))
+    tab = request.GET.get("tab")
+    if tab not in ("watching", "triggered"):
+        tab = "triggered" if any(a.is_unseen for a in triggered) else "watching"
     return render(request, "alerts/alerts_home.html", {
-        "active": alerts.filter(is_active=True).order_by("ticker"),
-        "triggered": alerts.filter(is_active=False).order_by("-triggered_at"),
+        "active": active, "triggered": triggered, "tab": tab,
     })
 
 

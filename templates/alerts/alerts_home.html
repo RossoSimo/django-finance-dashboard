@@ -1,74 +1,76 @@
 {% extends "base.html" %}
 {% block title %}Price alerts - FinanceDash{% endblock %}
+{% block page_title %}Alerts{% endblock %}
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <h3 class="mb-0">Price alerts</h3>
-    <a href="{% url 'alerts:add' %}" class="btn btn-sm btn-primary">+ New alert</a>
-</div>
-<p class="text-muted small">Alerts are checked when you open the dashboard, watchlist or this page (at most once a minute).
-    Each alert fires once; re-arm it to watch again.</p>
+{% url 'alerts:add' as add_url %}
+{% include "components/_page_header.html" with title="Price alerts" primary_url=add_url primary_label="New alert" primary_icon="plus-lg" %}
 
-<div class="card p-3 mb-4">
-    <h5>Watching</h5>
-    {% if active %}
-    <div class="table-responsive">
-    <table class="table table-sm align-middle mb-0">
-        <thead><tr><th>Ticker</th><th>Condition</th><th>Last price</th><th>Checked</th><th>Note</th><th><span class="visually-hidden">Actions</span></th></tr></thead>
-        <tbody>
-        {% for alert in active %}
-            <tr>
-                <td><strong>{{ alert.ticker }}</strong></td>
-                <td>{{ alert.get_direction_display }} {{ alert.target_price|floatformat:"-4" }}</td>
-                <td>{% if alert.last_price is not None %}{{ alert.last_price|floatformat:"-4" }} {{ alert.currency }}{% else %}—{% endif %}</td>
-                <td class="small">{% if alert.last_checked_at %}{{ alert.last_checked_at|timesince }} ago{% else %}not yet{% endif %}</td>
-                <td class="small">{{ alert.note }}</td>
-                <td class="text-end">
-                    <form method="post" action="{% url 'alerts:delete' alert.pk %}" class="d-inline">
-                        {% csrf_token %}
-                        <button class="btn btn-sm btn-outline-danger" type="submit" aria-label="Delete alert for {{ alert.ticker }}">Delete</button>
-                    </form>
-                </td>
-            </tr>
-        {% endfor %}
-        </tbody>
-    </table>
-    </div>
-    {% else %}
-        <p class="text-muted mb-0">No active alerts. Add one here, or from the 🔔 buttons on the watchlist and wallet.</p>
-    {% endif %}
-</div>
+<details class="mb-3 small text-body-secondary">
+    <summary>How alerts work</summary>
+    <p class="mt-2 mb-0">Alerts are checked when you open the dashboard, watchlist or this page (at most once a minute).
+        Each alert fires once; re-arm it to watch again.</p>
+</details>
 
-<div class="card p-3">
-    <h5>Triggered</h5>
+<ul class="nav nav-tabs mb-3" role="tablist" aria-label="Alert status">
+    <li class="nav-item" role="presentation">
+        <a class="nav-link{% if tab == 'watching' %} active{% endif %}" id="tab-watching" role="tab" href="{% url 'alerts:home' %}?tab=watching" aria-selected="{% if tab == 'watching' %}true{% else %}false{% endif %}" aria-controls="panel-alerts">Watching</a>
+    </li>
+    <li class="nav-item" role="presentation">
+        <a class="nav-link{% if tab == 'triggered' %} active{% endif %}" id="tab-triggered" role="tab" href="{% url 'alerts:home' %}?tab=triggered" aria-selected="{% if tab == 'triggered' %}true{% else %}false{% endif %}" aria-controls="panel-alerts">Triggered{% if triggered %} <span class="badge text-bg-secondary">{{ triggered|length }}</span>{% endif %}</a>
+    </li>
+</ul>
+
+<div class="card p-3" id="panel-alerts" role="tabpanel" aria-labelledby="tab-{{ tab }}">
+{% if tab == 'triggered' %}
     {% if triggered %}
     <div class="table-responsive">
-    <table class="table table-sm align-middle mb-0">
-        <thead><tr><th>Ticker</th><th>Condition</th><th>Triggered</th><th>Price then</th><th>Status</th><th><span class="visually-hidden">Actions</span></th></tr></thead>
-        <tbody>
+    <ul class="alert-list">
         {% for alert in triggered %}
-            <tr>
-                <td><strong>{{ alert.ticker }}</strong></td>
-                <td>{{ alert.get_direction_display }} {{ alert.target_price|floatformat:"-4" }}</td>
-                <td class="small">{{ alert.triggered_at|date:"Y-m-d H:i" }}</td>
-                <td>{{ alert.triggered_price|floatformat:"-4" }} {{ alert.currency }}</td>
-                <td>{% if alert.is_unseen %}<span class="badge text-bg-warning">New</span>{% else %}<span class="badge text-bg-secondary">Seen</span>{% endif %}</td>
-                <td class="text-end text-nowrap">
-                    {% if alert.is_unseen %}
-                    <form method="post" action="{% url 'alerts:dismiss' alert.pk %}" class="d-inline">{% csrf_token %}
-                        <button class="btn btn-sm btn-outline-secondary" type="submit">Dismiss</button></form>
-                    {% endif %}
-                    <form method="post" action="{% url 'alerts:rearm' alert.pk %}" class="d-inline">{% csrf_token %}
-                        <button class="btn btn-sm btn-outline-primary" type="submit">Re-arm</button></form>
-                    <form method="post" action="{% url 'alerts:delete' alert.pk %}" class="d-inline">{% csrf_token %}
-                        <button class="btn btn-sm btn-outline-danger" type="submit" aria-label="Delete alert for {{ alert.ticker }}">Delete</button></form>
-                </td>
-            </tr>
+        <li>
+            <div class="alert-sentence">
+                <strong>{{ alert.ticker }}</strong> {{ alert.direction }} <strong>{{ alert.target_text }}</strong>
+                · hit {{ alert.hit_text }} · {{ alert.triggered_at|date:"Y-m-d H:i" }}
+                {% if alert.is_unseen %}<span class="badge text-bg-warning">New</span>{% else %}<span class="badge text-bg-secondary">Seen</span>{% endif %}
+                {% if alert.note %}<div class="small text-body-secondary">{{ alert.note }}</div>{% endif %}
+            </div>
+            <div class="alert-actions">
+                {% if alert.is_unseen %}
+                <form method="post" action="{% url 'alerts:dismiss' alert.pk %}" class="m-0">{% csrf_token %}
+                    <input type="hidden" name="next" value="{% url 'alerts:home' %}?tab=triggered">
+                    <button class="btn btn-sm btn-outline-secondary" type="submit" aria-label="Dismiss alert for {{ alert.ticker }}">Dismiss</button></form>
+                {% endif %}
+                <form method="post" action="{% url 'alerts:rearm' alert.pk %}" class="m-0">{% csrf_token %}
+                    <button class="btn btn-sm btn-outline-primary" type="submit" aria-label="Re-arm alert for {{ alert.ticker }}">Re-arm</button></form>
+                {% include "components/_row_actions.html" with label="Actions for "|add:alert.ticker|add:" alert" items=alert.delete_menu %}
+            </div>
+        </li>
         {% endfor %}
-        </tbody>
-    </table>
+    </ul>
     </div>
     {% else %}
-        <p class="text-muted mb-0">Nothing has triggered yet.</p>
+        {% include "components/_empty.html" with icon="bell-slash" text="Nothing has triggered yet." %}
     {% endif %}
+{% else %}
+    {% if active %}
+    <div class="table-responsive">
+    <ul class="alert-list">
+        {% for alert in active %}
+        <li>
+            <div class="alert-sentence">
+                <strong>{{ alert.ticker }}</strong> {{ alert.direction }} <strong>{{ alert.target_text }}</strong>
+                · {% if alert.last_price is not None %}last {{ alert.last_text }}{% endif %}{% if alert.last_checked_at %} · checked {{ alert.last_checked_at|timesince }} ago{% else %}not checked yet{% endif %}
+                {% if alert.note %}<div class="small text-body-secondary">{{ alert.note }}</div>{% endif %}
+            </div>
+            <div class="alert-actions">
+                {% include "components/_row_actions.html" with label="Actions for "|add:alert.ticker|add:" alert" items=alert.delete_menu %}
+            </div>
+        </li>
+        {% endfor %}
+    </ul>
+    </div>
+    {% else %}
+        {% include "components/_empty.html" with icon="bell" text="No active alerts. Add one here, or from the Alert action on the watchlist and wallet." action_url=add_url action_label="New alert" %}
+    {% endif %}
+{% endif %}
 </div>
 {% endblock %}

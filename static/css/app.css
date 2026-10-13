@@ -168,3 +168,17 @@ button.fd-navlink { width: 100%; background: none; border: 0; text-align: left; 
 .cash-list li:last-child { border-bottom: 0; }
 .table-stack tfoot td, .table-stack tfoot th { font-weight: 600; }
 @media (max-width: 767.98px) { .table-stack tfoot { display: block; } }
+
+/* News list: each item is a single tap target */
+.news-list li { border-bottom: 1px solid var(--fd-border); }
+.news-list li:last-child { border-bottom: 0; }
+.news-item { display: flex; flex-direction: column; gap: .15rem; padding: .75rem; color: inherit; text-decoration: none; border-radius: .5rem; }
+.news-item:hover, .news-item:focus-visible { background: var(--fd-surface-2); }
+.news-title { font-weight: 500; }
+
+/* Alerts read as sentences */
+.alert-list { list-style: none; margin: 0; padding: 0; }
+.alert-list li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem 1rem; padding: .75rem 0; border-bottom: 1px solid var(--fd-border); }
+.alert-list li:last-child { border-bottom: 0; }
+.alert-sentence { flex: 1 1 18rem; min-width: 0; }
+.alert-actions { display: flex; align-items: center; gap: .5rem; }
