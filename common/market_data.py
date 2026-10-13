@@ -12,7 +12,7 @@ from __future__ import annotations
 import hashlib
 import logging
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 
 from django.conf import settings
 from django.core.cache import cache
@@ -107,6 +107,41 @@ class NewsItem:
     published: datetime | None
 
 
+def _parse_news_entry(entry: dict, ticker: str) -> NewsItem | None:
+    """Turn one Yahoo news entry (nested "content" or flat format) into a NewsItem."""
+    content = entry.get("content", entry)
+    title = content.get("title") or entry.get("title")
+    link = (
+        content.get("canonicalUrl", {}).get("url")
+        if isinstance(content.get("canonicalUrl"), dict)
+        else content.get("link") or entry.get("link")
+    )
+    publisher = None
+    if isinstance(content.get("provider"), dict):
+        publisher = content["provider"].get("displayName")
+    publisher = publisher or entry.get("publisher")
+
+    # Always timezone-aware, so mixed sources can be sorted together.
+    pub_date = None
+    pub_raw = content.get("pubDate") or entry.get("providerPublishTime")
+    if isinstance(pub_raw, (int, float)):
+        try:
+            pub_date = datetime.fromtimestamp(pub_raw, tz=timezone.utc)
+        except Exception:
+            pub_date = None
+    elif isinstance(pub_raw, str):
+        try:
+            pub_date = datetime.fromisoformat(pub_raw.replace("Z", "+00:00"))
+            if pub_date.tzinfo is None:
+                pub_date = pub_date.replace(tzinfo=timezone.utc)
+        except Exception:
+            pub_date = None
+
+    if not (title and link):
+        return None
+    return NewsItem(ticker=ticker.upper(), title=title, publisher=publisher, link=link, published=pub_date)
+
+
 def get_news_for_ticker(ticker: str, limit: int = 8) -> list[NewsItem]:
     """Return recent news items for a ticker, cached briefly."""
     cache_key = f"news:{ticker.upper()}"
@@ -119,43 +154,16 @@ def get_news_for_ticker(ticker: str, limit: int = 8) -> list[NewsItem]:
 
     items: list[NewsItem] = []
     try:
-        t = yf.Ticker(ticker)
-        raw_news = t.news or []
+        raw_news = yf.Ticker(ticker).news or []
+        if not raw_news:
+            # Ticker.news uses an endpoint Yahoo has started answering with 404
+            # (yfinance swallows it and returns []); the search endpoint still works.
+            raw_news = yf.Search(ticker, max_results=0, news_count=10, lists_count=0,
+                                 raise_errors=False).news or []
         for entry in raw_news:
-            # yfinance news items can be nested under "content" in newer versions
-            content = entry.get("content", entry)
-            title = content.get("title") or entry.get("title")
-            link = (
-                content.get("canonicalUrl", {}).get("url")
-                if isinstance(content.get("canonicalUrl"), dict)
-                else content.get("link") or entry.get("link")
-            )
-            publisher = None
-            if isinstance(content.get("provider"), dict):
-                publisher = content["provider"].get("displayName")
-            publisher = publisher or entry.get("publisher")
-
-            pub_date = None
-            pub_raw = content.get("pubDate") or entry.get("providerPublishTime")
-            if isinstance(pub_raw, (int, float)):
-                try:
-                    pub_date = datetime.fromtimestamp(pub_raw)
-                except Exception:
-                    pub_date = None
-            elif isinstance(pub_raw, str):
-                try:
-                    pub_date = datetime.fromisoformat(pub_raw.replace("Z", "+00:00"))
-                except Exception:
-                    pub_date = None
-
-            if title and link:
-                items.append(NewsItem(
-                    ticker=ticker.upper(),
-                    title=title,
-                    publisher=publisher,
-                    link=link,
-                    published=pub_date,
-                ))
+            item = _parse_news_entry(entry, ticker)
+            if item:
+                items.append(item)
     except Exception:
         logger.exception("Failed to fetch news for %s", ticker)
 
@@ -173,7 +181,7 @@ def get_news_for_tickers(tickers: list[str], limit_per_ticker: int = 5) -> list[
                 seen_links.add(item.link)
                 all_items.append(item)
 
-    all_items.sort(key=lambda i: i.published or datetime.min, reverse=True)
+    all_items.sort(key=lambda i: i.published or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
     return all_items
 
 

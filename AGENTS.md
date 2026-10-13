@@ -3,9 +3,6 @@
 Guide for AI coding agents (and humans) working on this repo. Read this first;
 keep the **Progress** section up to date when you finish a piece of work.
 
-> Note: `C:\github\AGENTS.md` (one level up) describes a different project
-> ("Fantaly", fantasy football). It does **not** apply here; this file does.
-
 ## What this is
 
 A local-first personal finance dashboard (Django monolith, server-rendered
