@@ -842,3 +842,51 @@ class WalletPageTests(TestCase):
         resp = self.client.get(reverse("wallet:delete_transaction", args=[tx.pk]))
         self.assertContains(resp, "form-card")
         self.assertContains(resp, "recalculat")
+
+
+class TransactionAmountDisplayTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user("alice")
+        set_base_currency(self.user, "USD")
+        self.client.force_login(self.user)
+        self.cash = CashAccount.objects.create(user=self.user, name="Bank", opening_balance=D("100000"))
+        self.holding = Holding.objects.create(user=self.user, ticker="AAPL", opening_quantity=D("100"))
+        self.n = 0
+
+    def _tx(self, tx_type, **kw):
+        self.n += 1
+        kw.setdefault("date", date(2026, 1, self.n))
+        target = {"holding": self.holding} if tx_type in ("buy", "sell") else {}
+        return save_transaction(Transaction(user=self.user, tx_type=tx_type, cash_account=self.cash, **target, **kw))
+
+    def _shown(self):
+        return {t.pk: t.signed_amount for t in self.client.get(reverse("wallet:transaction_list")).context["transactions"]}
+
+    def test_buy_includes_fees_as_negative(self):
+        tx = self._tx("buy", quantity=D("10"), price=D("100"), fees=D("5"))
+        self.assertEqual(self._shown()[tx.pk], D("-1005"))
+        self.assertContains(self.client.get(reverse("wallet:transaction_list")), "1.005,00")
+
+    def test_sell_is_proceeds_minus_fees(self):
+        tx = self._tx("sell", quantity=D("10"), price=D("100"), fees=D("5"))
+        self.assertEqual(self._shown()[tx.pk], D("995"))
+
+    def test_stray_amount_on_buy_is_ignored(self):
+        tx = self._tx("buy", quantity=D("10"), price=D("100"), fees=D("5"), amount=D("42"))
+        self.assertEqual(self._shown()[tx.pk], D("-1005"))
+        self.assertNotContains(self.client.get(reverse("wallet:transaction_list")), "42,00")
+
+    def test_signs_for_cash_types(self):
+        w = self._tx("withdraw", amount=D("30"))
+        d = self._tx("deposit", amount=D("20"))
+        v = self._tx("dividend", amount=D("7"))
+        shown = self._shown()
+        self.assertEqual((shown[w.pk], shown[d.pk], shown[v.pk]), (D("-30"), D("20"), D("7")))
+
+    def test_displayed_values_equal_ledger_cash_effect(self):
+        txs = [self._tx("buy", quantity=D("1"), price=D("10"), fees=D("1"), amount=D("9")),
+               self._tx("sell", quantity=D("2"), price=D("10"), fees=D("1")),
+               self._tx("deposit", amount=D("5")), self._tx("withdraw", amount=D("3"))]
+        shown = self._shown()
+        for tx in txs:
+            self.assertEqual(shown[tx.pk], ledger.cash_effect(tx))

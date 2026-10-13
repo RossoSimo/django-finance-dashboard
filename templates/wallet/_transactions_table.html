@@ -10,7 +10,7 @@
             <td data-label="Target" class="d-none d-md-table-cell">{{ tx.target|default:"—" }}</td>
             <td class="num figure" data-label="Qty">{% if tx.quantity is not None %}{{ tx.quantity|num }}{% else %}—{% endif %}</td>
             <td class="num figure" data-label="Price">{% if tx.price is not None %}{{ tx.price|num }}{% else %}—{% endif %}</td>
-            <td class="num figure cell-figure" data-label="Amount">{% if tx.signed_amount is not None %}{% include "components/_change.html" with value=tx.signed_amount pct=None currency=tx.currency %}{% else %}—{% endif %}</td>
+            <td class="num figure cell-figure" data-label="Amount">{% include "components/_change.html" with value=tx.signed_amount pct=None currency=tx.currency %}</td>
             {% if actions %}
             <td class="num figure" data-label="Fees">{% if tx.fees %}{{ tx.fees|money:tx.currency }}{% else %}—{% endif %}</td>
             <td data-label="Notes">{{ tx.notes|default:"—" }}</td>

@@ -9,6 +9,7 @@ from django.urls import reverse
 
 from .csv_import import COLUMNS as CSV_COLUMNS
 from .csv_import import MAX_BYTES, MAX_ROWS, SAMPLE_CSV, parse_csv, run_import
+from .ledger import cash_effect
 from .forms import CashAccountForm, HoldingForm, TransactionForm
 from .models import CashAccount, Holding, Transaction
 from .services import (
@@ -20,28 +21,16 @@ from .services import (
 )
 
 
-INFLOW_TYPES = {"sell", "deposit", "dividend"}
-
-
 def _decorate_transactions(transactions):
     """Attach display fields: target label, currency and a signed cash amount."""
     out = []
     for tx in transactions:
         tx.target = tx.holding.ticker if tx.holding else (tx.cash_account.name if tx.cash_account else None)
-        if tx.amount is not None:
-            value = tx.amount
-        elif tx.quantity is not None and tx.price is not None:
-            value = tx.quantity * tx.price
-        else:
-            value = None
         if tx.cash_account:
             tx.currency = tx.cash_account.currency
         else:
             tx.currency = tx.holding.currency if tx.holding else ""
-        if value is None:
-            tx.signed_amount = None
-        else:
-            tx.signed_amount = value if tx.tx_type in INFLOW_TYPES else -value
+        tx.signed_amount = cash_effect(tx)  # exactly what the books moved, fees included
         tx.menu = [
             {"url": reverse("wallet:edit_transaction", args=[tx.pk]), "label": "Edit", "icon": "pencil"},
             {"url": reverse("wallet:delete_transaction", args=[tx.pk]), "label": "Delete", "icon": "trash",
