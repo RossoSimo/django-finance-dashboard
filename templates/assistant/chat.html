@@ -48,25 +48,6 @@
     </div>
 </form>
 
-<style>
-    .chat-bubble {
-        border-radius: 12px;
-        padding: 10px 14px;
-        margin-bottom: 6px;
-        max-width: 90%;
-    }
-    .chat-user {
-        background: rgba(79,142,247,0.12);
-        margin-left: auto;
-        text-align: right;
-    }
-    .chat-assistant {
-        background: rgba(148,163,184,0.12);
-    }
-    [data-bs-theme="dark"] .chat-user { background: rgba(79,142,247,0.18); }
-    [data-bs-theme="dark"] .chat-assistant { background: rgba(255,255,255,0.06); }
-</style>
-
 <script>
     document.querySelectorAll(".suggested-prompt").forEach(function(btn) {
         btn.addEventListener("click", function() {

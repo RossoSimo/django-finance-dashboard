@@ -73,6 +73,7 @@ TEMPLATES = [
                 "django.contrib.messages.context_processors.messages",
                 "accounts.context_processors.signup_enabled",
                 "alerts.context_processors.triggered_alerts",
+                "common.context_processors.nav",
             ],
         },
     },

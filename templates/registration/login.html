@@ -1,7 +1,7 @@
-{% extends "base.html" %}
+{% extends "base_auth.html" %}
 {% block title %}Log in - FinanceDash{% endblock %}
 {% block content %}
-<div class="card p-4 mx-auto" style="max-width: 420px;">
+<div class="card p-4">
     <h3 class="mb-3">Log in</h3>
     <form method="post" action="{% url 'login' %}">
         {% csrf_token %}

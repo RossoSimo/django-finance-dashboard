@@ -1,0 +1,29 @@
+{% comment %}
+Navigation items. Parameter `set`:
+  main     sidebar groups (Overview, Money, Markets, Tools)
+  account  Settings and Admin (sidebar user menu)
+  more     items that are not in the mobile tab bar, plus Settings and Admin
+{% endcomment %}
+{% if set == "main" %}
+<p class="fd-navgroup">Overview</p>
+<a class="fd-navlink" href="{% url 'dashboard:home' %}"{% if nav_active == "dashboard" %} aria-current="page"{% endif %}><i class="bi bi-grid-1x2" aria-hidden="true"></i><span>Dashboard</span></a>
+<a class="fd-navlink" href="{% url 'performance:portfolio' %}"{% if nav_active == "performance" %} aria-current="page"{% endif %}><i class="bi bi-graph-up-arrow" aria-hidden="true"></i><span>Performance</span></a>
+<p class="fd-navgroup">Money</p>
+<a class="fd-navlink" href="{% url 'wallet:home' %}"{% if nav_active == "wallet" %} aria-current="page"{% endif %}><i class="bi bi-wallet2" aria-hidden="true"></i><span>Wallet</span></a>
+<a class="fd-navlink" href="{% url 'assistant:import_upload' %}"{% if nav_active == "import" %} aria-current="page"{% endif %}><i class="bi bi-camera" aria-hidden="true"></i><span>Import</span></a>
+<p class="fd-navgroup">Markets</p>
+<a class="fd-navlink" href="{% url 'watchlist:home' %}"{% if nav_active == "watchlist" %} aria-current="page"{% endif %}><i class="bi bi-eye" aria-hidden="true"></i><span>Watchlist</span></a>
+<a class="fd-navlink" href="{% url 'alerts:home' %}"{% if nav_active == "alerts" %} aria-current="page"{% endif %}><i class="bi bi-bell" aria-hidden="true"></i><span>Alerts</span>{% if unseen_alerts %} <span class="badge text-bg-warning ms-auto">{{ unseen_alerts|length }}{% if unseen_alerts_more %}+{% endif %}<span class="visually-hidden"> triggered</span></span>{% endif %}</a>
+<a class="fd-navlink" href="{% url 'newsfeed:home' %}"{% if nav_active == "news" %} aria-current="page"{% endif %}><i class="bi bi-newspaper" aria-hidden="true"></i><span>News</span></a>
+<p class="fd-navgroup">Tools</p>
+<a class="fd-navlink" href="{% url 'assistant:chat' %}"{% if nav_active == "assistant" %} aria-current="page"{% endif %}><i class="bi bi-chat-dots" aria-hidden="true"></i><span>Assistant</span></a>
+{% else %}
+{% if set == "more" %}
+<a class="fd-navlink" href="{% url 'watchlist:home' %}"{% if nav_active == "watchlist" %} aria-current="page"{% endif %}><i class="bi bi-eye" aria-hidden="true"></i><span>Watchlist</span></a>
+<a class="fd-navlink" href="{% url 'newsfeed:home' %}"{% if nav_active == "news" %} aria-current="page"{% endif %}><i class="bi bi-newspaper" aria-hidden="true"></i><span>News</span></a>
+<a class="fd-navlink" href="{% url 'assistant:chat' %}"{% if nav_active == "assistant" %} aria-current="page"{% endif %}><i class="bi bi-chat-dots" aria-hidden="true"></i><span>Assistant</span></a>
+<a class="fd-navlink" href="{% url 'assistant:import_upload' %}"{% if nav_active == "import" %} aria-current="page"{% endif %}><i class="bi bi-camera" aria-hidden="true"></i><span>Import</span></a>
+{% endif %}
+<a class="fd-navlink" href="{% url 'settings' %}"{% if nav_active == "settings" %} aria-current="page"{% endif %}><i class="bi bi-gear" aria-hidden="true"></i><span>Settings</span></a>
+{% if user.is_staff %}<a class="fd-navlink" href="/admin/"><i class="bi bi-shield-lock" aria-hidden="true"></i><span>Admin</span></a>{% endif %}
+{% endif %}
