@@ -1,9 +1,12 @@
+from decimal import Decimal
 from unittest import mock
 
 from django.core.cache import cache
+from django.template import Context, Template
 from django.test import TestCase
 
 from common import market_data
+from common.templatetags.fmt import money, num, pct, signed_money
 
 
 class NewsTests(TestCase):
@@ -31,3 +34,32 @@ class NewsTests(TestCase):
         items = market_data.get_news_for_tickers(["AAPL"], limit_per_ticker=5)
         self.assertEqual([i.title for i in items], ["Nested", "Flat", "Undated"])
         yf.Search.assert_not_called()
+
+
+class FormatTests(TestCase):
+    def test_money(self):
+        self.assertEqual(money(Decimal("1234.5"), "EUR"), "1.234,50 €")
+        self.assertEqual(money(-1234.5, "USD"), "−1.234,50 $")
+        self.assertEqual(money(Decimal("1234567.891"), "SEK"), "1.234.567,89 SEK")
+        self.assertEqual(money(Decimal("1250"), "GBp"), "12,50 £")
+        self.assertEqual(money(None, "EUR"), "—")
+
+    def test_signed_money(self):
+        self.assertEqual(signed_money(Decimal("12.3"), "EUR"), "+12,30 €")
+        self.assertEqual(signed_money(Decimal("-12.3"), "EUR"), "−12,30 €")
+
+    def test_num(self):
+        self.assertEqual(num(Decimal("0.0500")), "0,05")
+        self.assertEqual(num(Decimal("12")), "12")
+        self.assertEqual(num(1234.5, 2), "1.234,50")
+
+    def test_pct(self):
+        self.assertEqual(pct(2.345), "+2,35 %")
+        self.assertEqual(pct(Decimal("-1.1")), "−1,10 %")
+
+    def test_negative_zero_has_no_sign(self):
+        self.assertEqual(money(Decimal("-0.004"), "EUR"), "0,00 €")
+        self.assertEqual(pct(-0.001), "0,00 %")
+
+    def test_template_builtin(self):
+        self.assertEqual(Template("{{ v|money:'EUR' }}").render(Context({"v": 5})), "5,00 €")
