@@ -182,3 +182,8 @@ button.fd-navlink { width: 100%; background: none; border: 0; text-align: left; 
 .alert-list li:last-child { border-bottom: 0; }
 .alert-sentence { flex: 1 1 18rem; min-width: 0; }
 .alert-actions { display: flex; align-items: center; gap: .5rem; }
+
+/* Sticky bar outside a card (screenshot review): span the page gutter on mobile */
+@media (max-width: 767.98px) {
+    .sticky-actions.sticky-page { margin: 1rem -1rem 0; padding: .6rem 1rem; }
+}

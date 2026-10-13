@@ -1,123 +1,149 @@
 {% extends "base.html" %}
 {% block title %}Review import - FinanceDash{% endblock %}
+{% block page_title %}Review import{% endblock %}
 {% block content %}
+{% include "components/_page_header.html" with title="Review before importing" subtitle="Each position was read from your screenshot, then matched to a real market listing and checked against today's price. Fix anything that's off, untick what you don't want, then confirm." %}
 
-<h3 class="mb-1">Review before importing</h3>
-<p class="text-muted mb-3">
-    Each position was read from your screenshot, then matched to a real market listing and checked against
-    today's price. Fix anything that's off, untick what you don't want, then confirm.
-</p>
-
-<form method="post">
+<form method="post" data-busy="Importing…" id="review-form">
     {% csrf_token %}
     {{ holding_formset.management_form }}
     {{ cash_formset.management_form }}
 
     {% if holding_rows %}
-    <div class="card p-3 mb-4">
-        <div class="d-flex flex-wrap justify-content-between align-items-baseline gap-2 mb-2">
-            <h5 class="mb-0">Holdings</h5>
-            <span class="small text-muted">{{ verified_count }} of {{ holding_rows|length }} verified against the market</span>
+    <div class="d-flex flex-wrap justify-content-between align-items-baseline gap-2 mb-2">
+        <h2 class="h5 mb-0">Holdings</h2>
+        <span class="small text-body-secondary">{{ verified_count }} of {{ holding_rows|length }} verified against the market</span>
+    </div>
+    {% for form, check in holding_rows %}
+    <div class="card p-3 mb-3 border-2 {% if check.status == 'verified' %}border-success{% elif check.status == 'check' %}border-warning{% else %}border-danger{% endif %}">
+        <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+            <div>
+                {% if check.status == 'verified' %}<span class="badge text-bg-success">✓ Verified</span>
+                {% elif check.status == 'check' %}<span class="badge text-bg-warning">⚠ Check</span>
+                {% else %}<span class="badge text-bg-danger">✗ Not found</span>{% endif %}
+            </div>
+            <div class="form-check form-switch m-0">
+                {{ form.include }}
+                <label class="form-check-label" for="{{ form.include.id_for_label }}">Import</label>
+            </div>
         </div>
-        {% for form, check in holding_rows %}
-        <div class="border rounded p-3 mb-3 {% if check.status == 'verified' %}border-success{% elif check.status == 'check' %}border-warning{% else %}border-danger{% endif %}">
-            <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-2">
+
+        <div class="row g-2 mb-2 small">
+            <div class="col-md-6">
+                <div class="text-body-secondary">Read from screenshot</div>
                 <div>
-                    {% if check.status == 'verified' %}<span class="badge text-bg-success">✓ Verified</span>
-                    {% elif check.status == 'check' %}<span class="badge text-bg-warning">⚠ Check</span>
-                    {% else %}<span class="badge text-bg-danger">✗ Not found</span>{% endif %}
-                    <span class="small ms-1">
-                        <strong>Read:</strong> {{ check.read.name|default:"—" }}
-                        {% if check.read.ticker %} · {{ check.read.ticker }}{% endif %}
-                        {% if check.read.isin %} · ISIN {{ check.read.isin }}{% endif %}
-                        {% if check.read.quantity %} · qty {{ check.read.quantity }}{% endif %}
-                        {% if check.read.price %} · price {{ check.read.price }}{% endif %}
-                        {% if check.read.market_value %} · value {{ check.read.market_value }}{% endif %}
-                        {% if check.read.currency %} {{ check.read.currency }}{% endif %}
-                    </span>
-                </div>
-                <div class="form-check m-0">
-                    {{ form.include }}
-                    <label class="form-check-label" for="{{ form.include.id_for_label }}">Import</label>
+                    <strong>{{ check.read.name|default:"—" }}</strong>
+                    {% if check.read.ticker %} · {{ check.read.ticker }}{% endif %}
+                    {% if check.read.isin %} · ISIN {{ check.read.isin }}{% endif %}
+                    {% if check.read.quantity %} · qty {{ check.read.quantity }}{% endif %}
+                    {% if check.read.price %} · price {{ check.read.price }}{% endif %}
+                    {% if check.read.market_value %} · value {{ check.read.market_value }}{% endif %}
+                    {% if check.read.currency %} {{ check.read.currency }}{% endif %}
                 </div>
             </div>
             {% if check.symbol %}
-            <p class="small mb-2">
-                <strong>Market:</strong> {{ check.symbol }} — {{ check.symbol_name }}{% if check.exchange %} ({{ check.exchange }}){% endif %}
-                · live {{ check.live_price }} {{ check.live_currency }}
-                {% if check.live_value %} · value now {{ check.live_value }} {{ check.live_currency }}{% endif %}
-            </p>
-            {% endif %}
-            {% if check.notes %}
-            <ul class="small mb-2 ps-3">{% for note in check.notes %}<li>{{ note }}</li>{% endfor %}</ul>
-            {% endif %}
-
-            <div class="row g-2">
-                <div class="col-6 col-md-2">
-                    <label class="form-label small mb-0" for="{{ form.ticker.id_for_label }}">Ticker</label>
-                    {{ form.ticker }}
-                    {% if check.candidates %}
-                    <datalist id="candidates-{{ forloop.counter }}">
-                        {% for c in check.candidates %}<option value="{{ c.symbol }}">{{ c.name }} · {{ c.exchange }} · {{ c.price }} {{ c.currency }}</option>{% endfor %}
-                    </datalist>
-                    {% endif %}
-                </div>
-                <div class="col-6 col-md-3">
-                    <label class="form-label small mb-0" for="{{ form.name.id_for_label }}">Name</label>
-                    {{ form.name }}
-                </div>
-                <div class="col-6 col-md-2">
-                    <label class="form-label small mb-0" for="{{ form.asset_type.id_for_label }}">Type</label>
-                    {{ form.asset_type }}
-                </div>
-                <div class="col-6 col-md-2">
-                    <label class="form-label small mb-0" for="{{ form.quantity.id_for_label }}">Quantity{% if check.quantity_derived %} <span class="text-muted">(derived)</span>{% endif %}</label>
-                    {{ form.quantity }}
-                </div>
-                <div class="col-6 col-md-2">
-                    <label class="form-label small mb-0" for="{{ form.avg_cost.id_for_label }}">Avg cost{% if check.avg_cost_from_market %} <span class="text-muted">(today's price)</span>{% endif %}</label>
-                    {{ form.avg_cost }}
-                </div>
-                <div class="col-6 col-md-1">
-                    <label class="form-label small mb-0" for="{{ form.currency.id_for_label }}">Currency</label>
-                    {{ form.currency }}
+            <div class="col-md-6">
+                <div class="text-body-secondary">Market match</div>
+                <div>
+                    <strong>{{ check.symbol }} — {{ check.symbol_name }}</strong>{% if check.exchange %} ({{ check.exchange }}){% endif %}
+                    · live {{ check.live_price }} {{ check.live_currency }}
+                    {% if check.live_value %} · value now {{ check.live_value }} {{ check.live_currency }}{% endif %}
                 </div>
             </div>
-            {% if form.errors %}<div class="text-danger small mt-2">{{ form.errors }}</div>{% endif %}
-            {% if check.candidates %}
-            <script>document.getElementById("{{ form.ticker.id_for_label }}").setAttribute("list", "candidates-{{ forloop.counter }}");</script>
             {% endif %}
         </div>
-        {% endfor %}
+        {% if check.notes %}
+        <ul class="small mb-2 ps-3">{% for note in check.notes %}<li>{{ note }}</li>{% endfor %}</ul>
+        {% endif %}
+
+        <div class="row g-2">
+            <div class="col-6 col-md-2">
+                <label class="form-label small mb-0" for="{{ form.ticker.id_for_label }}">Ticker</label>
+                {{ form.ticker }}
+                {% if check.candidates %}
+                <datalist id="candidates-{{ forloop.counter }}">
+                    {% for c in check.candidates %}<option value="{{ c.symbol }}">{{ c.name }} · {{ c.exchange }} · {{ c.price }} {{ c.currency }}</option>{% endfor %}
+                </datalist>
+                {% endif %}
+            </div>
+            <div class="col-6 col-md-3">
+                <label class="form-label small mb-0" for="{{ form.name.id_for_label }}">Name</label>
+                {{ form.name }}
+            </div>
+            <div class="col-6 col-md-2">
+                <label class="form-label small mb-0" for="{{ form.asset_type.id_for_label }}">Type</label>
+                {{ form.asset_type }}
+            </div>
+            <div class="col-6 col-md-2">
+                <label class="form-label small mb-0" for="{{ form.quantity.id_for_label }}">Quantity{% if check.quantity_derived %} <span class="text-body-secondary">(derived)</span>{% endif %}</label>
+                {{ form.quantity }}
+            </div>
+            <div class="col-6 col-md-2">
+                <label class="form-label small mb-0" for="{{ form.avg_cost.id_for_label }}">Avg cost{% if check.avg_cost_from_market %} <span class="text-body-secondary">(today's price)</span>{% endif %}</label>
+                {{ form.avg_cost }}
+            </div>
+            <div class="col-6 col-md-1">
+                <label class="form-label small mb-0" for="{{ form.currency.id_for_label }}">Currency</label>
+                {{ form.currency }}
+            </div>
+        </div>
+        {% if form.errors %}<div class="text-danger small mt-2" role="alert">{{ form.errors }}</div>{% endif %}
+        {% if check.candidates %}
+        <script>document.getElementById("{{ form.ticker.id_for_label }}").setAttribute("list", "candidates-{{ forloop.counter }}");</script>
+        {% endif %}
     </div>
+    {% endfor %}
     {% endif %}
 
     {% if cash_formset.forms %}
-    <div class="card p-3 mb-4">
-        <h5>Cash accounts</h5>
-        <div class="table-responsive">
-        <table class="table table-sm align-middle">
-            <thead><tr><th>Import</th><th>Name</th><th>Currency</th><th>Balance</th></tr></thead>
-            <tbody>
-            {% for form in cash_formset %}
-                <tr>
-                    <td>{{ form.include }}</td>
-                    <td>{{ form.name }}</td>
-                    <td>{{ form.currency }}</td>
-                    <td>{{ form.balance }}</td>
-                </tr>
-                {% if form.errors %}
-                <tr><td colspan="4"><div class="text-danger small">{{ form.errors }}</div></td></tr>
-                {% endif %}
-            {% endfor %}
-            </tbody>
-        </table>
+    <h2 class="h5 mb-2 mt-4">Cash accounts</h2>
+    {% for form in cash_formset %}
+    <div class="card p-3 mb-3">
+        <div class="d-flex justify-content-end mb-2">
+            <div class="form-check form-switch m-0">
+                {{ form.include }}
+                <label class="form-check-label" for="{{ form.include.id_for_label }}">Import</label>
+            </div>
         </div>
+        <div class="row g-2">
+            <div class="col-12 col-md-5">
+                <label class="form-label small mb-0" for="{{ form.name.id_for_label }}">Name</label>
+                {{ form.name }}
+            </div>
+            <div class="col-6 col-md-3">
+                <label class="form-label small mb-0" for="{{ form.currency.id_for_label }}">Currency</label>
+                {{ form.currency }}
+            </div>
+            <div class="col-6 col-md-4">
+                <label class="form-label small mb-0" for="{{ form.balance.id_for_label }}">Balance</label>
+                {{ form.balance }}
+            </div>
+        </div>
+        {% if form.errors %}<div class="text-danger small mt-2" role="alert">{{ form.errors }}</div>{% endif %}
     </div>
+    {% endfor %}
     {% endif %}
 
-    <button type="submit" class="btn btn-success">Confirm &amp; import</button>
-    <a href="{% url 'assistant:import_upload' %}" class="btn btn-link">Start over</a>
+    {% with h=holding_formset.forms|length c=cash_formset.forms|length %}
+    <div class="form-actions sticky-actions sticky-page d-flex flex-wrap gap-2">
+        <button type="submit" class="btn btn-primary" id="import-submit"><span id="import-label">Import {{ h|add:c }} items</span></button>
+        <a href="{% url 'assistant:import_upload' %}" class="btn btn-link">Start over</a>
+    </div>
+    {% endwith %}
 </form>
+{% endblock %}
 
+{% block scripts %}
+<script>
+(function () {
+    var form = document.getElementById("review-form");
+    var out = document.getElementById("import-label");
+    if (!form || !out) { return; }
+    function update() {
+        out.textContent = "Import " + form.querySelectorAll('input[type="checkbox"][name$="-include"]:checked').length + " items";
+    }
+    form.addEventListener("change", update);
+    update();
+})();
+</script>
 {% endblock %}

@@ -191,6 +191,17 @@ class CsvViewTests(TestCase):
         self.assertEqual(Transaction.objects.filter(user=self.user).count(), 4)
         self.assertNotIn("csv_import_rows", self.client.session)
 
+    def test_csv_preview_lists_errors_first(self):
+        self.upload("date,type,account,amount\n2026-01-01,deposit,Broker,10\n2026-01-02,withdraw,Broker,99999\n")
+        html = self.client.get(reverse("wallet:csv_preview")).content.decode()
+        self.assertLess(html.index('text-bg-danger">Error'), html.index('text-bg-success">OK'))
+        # display order only: the session rows keep file order
+        self.assertEqual([r["date"] for r in self.client.session["csv_import_rows"]], ["2026-01-01", "2026-01-02"])
+
+    def test_csv_forms_have_busy_state(self):
+        self.upload(SAMPLE_CSV)
+        self.assertContains(self.client.get(reverse("wallet:csv_preview")), 'data-busy="Importing…"')
+
     def test_preview_with_errors_has_no_import_button(self):
         self.upload("date,type,account,amount\n2026-01-01,withdraw,Broker,99999\n")
         preview = self.client.get(reverse("wallet:csv_preview"))

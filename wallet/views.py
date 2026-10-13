@@ -206,4 +206,7 @@ def csv_preview(request):
     else:
         result = run_import(request.user, rows, commit=False)
 
-    return render(request, "wallet/csv_preview.html", {"result": result})
+    # Errors first, then the rest in file order (sorted is stable). Display
+    # only: the session rows and the import order are untouched.
+    display_rows = sorted(result.rows, key=lambda r: r.status != "error")
+    return render(request, "wallet/csv_preview.html", {"result": result, "display_rows": display_rows})

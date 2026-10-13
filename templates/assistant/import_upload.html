@@ -1,35 +1,35 @@
 {% extends "base.html" %}
 {% block title %}Import from screenshot - FinanceDash{% endblock %}
+{% block page_title %}Import{% endblock %}
 {% block content %}
+{% include "components/_page_header.html" with title="Import from screenshot" subtitle="A local vision model reads your positions; you review everything before anything is saved." %}
 
-<h3 class="mb-1">📸 Import from screenshot</h3>
-<p class="text-muted">
-    Upload a screenshot of your bank, broker or portfolio app, or of a list of your investments.
-    A local vision model (via Ollama) reads each position and cash balance; every position is then
-    matched to a real market listing (by ticker, ISIN or name) and checked against today's price.
-    You review everything before anything is saved.
-</p>
-<ul class="small text-muted">
-    <li>Best results: a sharp, cropped screenshot of the positions table, with quantity and price or value visible.</li>
-    <li>Reading takes about 20–40 seconds (longer the first time, while the model loads).</li>
-</ul>
-
-<div class="card p-4" style="max-width: 600px;">
-    <form method="post" enctype="multipart/form-data">
+<div class="card p-4 form-card mb-3">
+    <form method="post" enctype="multipart/form-data" data-busy="Reading your screenshot…">
         {% csrf_token %}
-        <div class="mb-3">
+        <div class="drop-zone mb-3">
+            <i class="bi bi-camera display-5" aria-hidden="true"></i>
+            <p class="mb-2">Drag a screenshot here, or choose a photo.</p>
             <label class="form-label" for="screenshot">Screenshot</label>
             <input type="file" id="screenshot" name="screenshot" accept="image/*" class="form-control" required>
         </div>
-        <button type="submit" class="btn btn-primary">Analyze screenshot</button>
-        <a href="{% url 'wallet:home' %}" class="btn btn-link">Cancel</a>
+        <div class="form-actions sticky-actions d-flex gap-2">
+            <button type="submit" class="btn btn-primary">Analyze screenshot</button>
+            <a href="{% url 'wallet:home' %}" class="btn btn-link">Cancel</a>
+        </div>
     </form>
 </div>
 
-<div class="alert alert-info mt-3" style="max-width: 600px;">
-    <strong>Heads up:</strong> importing a ticker that already exists as a
-    holding will <em>overwrite</em> its quantity/avg cost with the extracted
-    values (not add to them). Double-check the review screen before confirming.
-</div>
+{% include "components/_notice.html" with level="warning" text="Heads up: importing a ticker that already exists as a holding will overwrite its quantity and average cost with the extracted values (not add to them). Double-check the review screen before confirming." %}
 
+<details class="small text-body-secondary mt-3">
+    <summary>How it works</summary>
+    <p class="mt-2">Upload a screenshot of your bank, broker or portfolio app, or of a list of your investments.
+        Each position and cash balance is read, then matched to a real market listing (by ticker, ISIN or name)
+        and checked against today's price.</p>
+    <ul>
+        <li>Best results: a sharp, cropped screenshot of the positions table, with quantity and price or value visible.</li>
+        <li>Reading takes about 20–40 seconds (longer the first time, while the model loads).</li>
+    </ul>
+</details>
 {% endblock %}

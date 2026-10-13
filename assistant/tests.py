@@ -250,6 +250,23 @@ class ScreenshotImportFlowTests(TestCase):
         self.assertEqual((enel.ticker, enel.quantity, enel.avg_cost, enel.currency), ("ENEL.MI", D("150"), D("8.918"), "EUR"))
         self.assertEqual(CashAccount.objects.get(user=self.user).balance, D("2345.67"))
 
+    def test_screenshot_upload_has_busy_state(self):
+        page = self.client.get(reverse("assistant:import_upload"))
+        self.assertContains(page, 'data-busy="Reading your screenshot…"')
+        self.assertContains(page, 'accept="image/*"')
+        self.assertNotContains(page, "capture")
+
+    def test_review_has_sticky_import_button_with_count(self):
+        self.upload({
+            "holdings": [row(name="ENEL SPA", isin="IT0003128367", quantity=150, price=8.92, currency="EUR"),
+                         row(name="Zorblax", quantity=1, price=1, currency="EUR")],
+            "cash_accounts": [{"name": "Conto", "balance": 10, "currency": "EUR"}],
+        })
+        page = self.client.get(reverse("assistant:import_preview"))
+        self.assertContains(page, "sticky-actions")
+        self.assertContains(page, "Import 3 items")
+        self.assertContains(page, 'data-busy="Importing…"')
+
     def test_nothing_found(self):
         resp = self.upload({"holdings": [], "cash_accounts": []})
         self.assertRedirects(resp, reverse("assistant:import_upload"), fetch_redirect_response=False)
