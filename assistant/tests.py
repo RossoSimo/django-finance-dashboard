@@ -297,3 +297,27 @@ class HoldingImportFormTests(TestCase):
     def test_converted_average_cost_fits_the_form(self):
         c = checker().check_holding(row(name="Apple Inc", quantity=1, price=306.87, avg_cost=271.13, currency="EUR"))
         self.assertTrue(self.form(include="on", ticker="AAPL", avg_cost=c["avg_cost"]).is_valid())
+
+
+class ChatPageMarkupTests(TestCase):
+    def setUp(self):
+        self.client.force_login(User.objects.create_user("alice"))
+
+    def test_chat_has_no_inline_style_or_script(self):
+        resp = self.client.get(reverse("assistant:chat"))
+        self.assertNotContains(resp, "<style>")
+        self.assertNotContains(resp, "suggested-prompt\").forEach")
+
+    def test_chat_form_is_busy_aware_and_log_is_live(self):
+        resp = self.client.get(reverse("assistant:chat"))
+        self.assertContains(resp, 'data-busy="Thinking…"')
+        self.assertContains(resp, 'aria-live="polite"')
+        self.assertContains(resp, "suggested-prompt")
+
+    def test_suggested_prompts_hidden_once_there_is_history(self):
+        session = self.client.session
+        session["assistant_chat_history"] = [{"question": "Hi?", "answer": "Hello."}]
+        session.save()
+        resp = self.client.get(reverse("assistant:chat"))
+        self.assertNotContains(resp, "suggested-prompt")
+        self.assertContains(resp, "Clear chat")

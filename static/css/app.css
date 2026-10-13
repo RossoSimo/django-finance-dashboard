@@ -187,3 +187,11 @@ button.fd-navlink { width: 100%; background: none; border: 0; text-align: left; 
 @media (max-width: 767.98px) {
     .sticky-actions.sticky-page { margin: 1rem -1rem 0; padding: .6rem 1rem; }
 }
+
+/* Assistant chat */
+.chat-log { max-height: calc(100vh - 22rem); min-height: 12rem; overflow-y: auto; }
+.chat-composer { border-top: 1px solid var(--fd-border); }
+@media (max-width: 991.98px) {
+    .chat-composer { position: sticky; bottom: calc(var(--fd-tabbar-height) + env(safe-area-inset-bottom)); background: var(--fd-surface); border-radius: 0 0 var(--bs-card-border-radius) var(--bs-card-border-radius); }
+    .chat-log { max-height: calc(100vh - 20rem); }
+}

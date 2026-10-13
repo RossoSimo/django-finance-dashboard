@@ -168,3 +168,18 @@ class PerUserUniquenessTests(TestCase):
         form = WatchlistItemForm({"ticker": " aapl ", "asset_type": "stock"}, user=self.alice)
         self.assertFalse(form.is_valid())
         self.assertIn("ticker", form.errors)
+
+
+class SettingsAndAuthPageTests(TestCase):
+    def test_settings_has_appearance_choice(self):
+        user = User.objects.create_user("alice", password="pw-12345-xyz")
+        self.client.force_login(user)
+        resp = self.client.get(reverse("settings"))
+        for value in ("system", "light", "dark"):
+            self.assertContains(resp, f'name="theme" value="{value}"')
+        self.assertContains(resp, "<legend")
+
+    def test_login_uses_auth_layout(self):
+        resp = self.client.get(reverse("login"))
+        self.assertContains(resp, 'class="auth-card')
+        self.assertNotContains(resp, 'id="app-sidebar"')

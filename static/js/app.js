@@ -40,6 +40,36 @@
     });
     document.addEventListener("fd:themechange", syncToggles);
 
+    function storedTheme() {
+        try { return localStorage.getItem(KEY); } catch (e) { return null; }
+    }
+
+    // In "system" mode (nothing stored) follow the OS theme live.
+    if (window.matchMedia) {
+        var mq = window.matchMedia("(prefers-color-scheme: dark)");
+        var onSystemChange = function () {
+            if (!storedTheme()) {
+                var resolved = systemTheme();
+                root.setAttribute("data-bs-theme", resolved);
+                document.dispatchEvent(new CustomEvent("fd:themechange", { detail: { mode: "system", theme: resolved } }));
+            }
+        };
+        if (mq.addEventListener) { mq.addEventListener("change", onSystemChange); }
+        else if (mq.addListener) { mq.addListener(onSystemChange); }
+    }
+
+    // Settings page: Appearance radios (not part of any form).
+    document.addEventListener("DOMContentLoaded", function () {
+        var radios = document.querySelectorAll('input[type="radio"][name="theme"]');
+        if (!radios.length) { return; }
+        var mode = storedTheme();
+        if (mode !== "light" && mode !== "dark") { mode = "system"; }
+        radios.forEach(function (radio) {
+            radio.checked = radio.value === mode;
+            radio.addEventListener("change", function () { if (radio.checked) { setTheme(radio.value); } });
+        });
+    });
+
     document.addEventListener("DOMContentLoaded", function () {
         syncToggles();
         if (window.bootstrap) {
@@ -133,6 +163,36 @@
                 }
             });
             input.addEventListener("change", showName);
+        });
+    });
+})();
+
+
+/* Assistant chat: Enter sends, Shift+Enter inserts a newline. */
+(function () {
+    "use strict";
+    document.addEventListener("DOMContentLoaded", function () {
+        var log = document.getElementById("chat-log");
+        if (log) { log.scrollTop = log.scrollHeight; }
+        var input = document.getElementById("questionInput");
+        var form = document.getElementById("chat-form");
+        if (!input || !form) { return; }
+
+        function send() {
+            if (form.requestSubmit) { form.requestSubmit(); } else { form.submit(); }
+        }
+
+        input.addEventListener("keydown", function (event) {
+            if (event.key !== "Enter" || event.shiftKey || event.isComposing || event.keyCode === 229) { return; }
+            event.preventDefault();
+            if (input.value.trim()) { send(); }
+        });
+
+        document.querySelectorAll(".suggested-prompt").forEach(function (btn) {
+            btn.addEventListener("click", function () {
+                input.value = btn.dataset.prompt;
+                send();
+            });
         });
     });
 })();
