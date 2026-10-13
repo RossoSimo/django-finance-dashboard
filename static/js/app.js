@@ -59,6 +59,7 @@
     "use strict";
 
     var pendingForm = null;
+    var pendingSubmitter = null;
 
     document.addEventListener("submit", function (event) {
         var form = event.target;
@@ -67,6 +68,7 @@
         if (form.dataset.confirm && !form.dataset.confirmed && modalEl && window.bootstrap) {
             event.preventDefault();
             pendingForm = form;
+            pendingSubmitter = event.submitter || null;
             document.getElementById("confirm-modal-text").textContent = form.dataset.confirm;
             window.bootstrap.Modal.getOrCreateInstance(modalEl).show();
             return;
@@ -94,9 +96,11 @@
         if (!event.target.closest("#confirm-modal-ok") || !pendingForm) { return; }
         var form = pendingForm;
         pendingForm = null;
+        var submitter = pendingSubmitter;
+        pendingSubmitter = null;
         form.dataset.confirmed = "1";
         window.bootstrap.Modal.getInstance(document.getElementById("confirm-modal")).hide();
-        if (form.requestSubmit) { form.requestSubmit(); } else { form.submit(); }
+        if (form.requestSubmit) { if (submitter) { form.requestSubmit(submitter); } else { form.requestSubmit(); } } else { form.submit(); }
     });
 
     document.addEventListener("DOMContentLoaded", function () {

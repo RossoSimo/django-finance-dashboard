@@ -1,6 +1,6 @@
 {% comment %}label, items=[{url,label,icon,post,confirm,danger}]{% endcomment %}
 <div class="dropdown row-actions">
-    <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="{{ label }}"><i class="bi bi-three-dots" aria-hidden="true"></i></button>
+    <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="dropdown" data-bs-popper-config='{"strategy":"fixed"}' aria-expanded="false" aria-label="{{ label }}"><i class="bi bi-three-dots" aria-hidden="true"></i></button>
     <ul class="dropdown-menu dropdown-menu-end">
         {% for item in items %}
         <li>

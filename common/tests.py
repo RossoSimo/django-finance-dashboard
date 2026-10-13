@@ -122,6 +122,7 @@ class ComponentTests(TestCase):
         self.assertIn('aria-label="Actions for AAPL"', html)
         self.assertIn('<a class="dropdown-item"', html)
         self.assertIn("text-danger", html)
+        self.assertIn("data-bs-popper-config='{&quot;strategy&quot;:&quot;fixed&quot;}'".replace("&quot;", '"'), html)
 
     def test_form_fields_marks_errors(self):
         from django import forms
