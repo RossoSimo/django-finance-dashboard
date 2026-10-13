@@ -127,6 +127,8 @@ MARKET_DATA_CACHE_SECONDS = 60
 FX_CACHE_SECONDS = 900
 # Daily closes for the performance charts.
 PRICE_HISTORY_CACHE_SECONDS = 3600
+# Intraday bars, per range key (see common.market_data.INTRADAY_PARAMS).
+INTRADAY_CACHE_SECONDS = {"1d": 300, "7d": 900}
 # Base currency for new users (each user can change theirs in Settings).
 DEFAULT_BASE_CURRENCY = os.getenv("DEFAULT_BASE_CURRENCY", "EUR")
 NEWS_CACHE_SECONDS = 300

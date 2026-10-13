@@ -12,7 +12,7 @@ from common.market_data import Quote
 from wallet.models import CashAccount, Holding, Transaction
 from wallet.services import save_transaction
 
-from .services import holding_history, portfolio_history, range_start, sample_days
+from .services import RANGES, holding_history, portfolio_history, range_start, sample_days
 
 D = Decimal
 User = get_user_model()
@@ -48,6 +48,12 @@ class RangeTests(TestCase):
         self.assertEqual(range_start("max", today, None), today - timedelta(days=365))
         self.assertEqual(range_start("max", today, date(1990, 1, 1)), today - timedelta(days=3650))
         self.assertEqual(range_start("bogus", today, None), today - timedelta(days=182))
+
+    def test_short_ranges(self):
+        today = date(2026, 10, 12)
+        self.assertEqual(range_start("1d", today, None), date(2026, 10, 11))
+        self.assertEqual(range_start("7d", today, None), date(2026, 10, 5))
+        self.assertEqual(list(RANGES)[:3], ["1d", "7d", "1m"])
 
     def test_sample_days(self):
         days = sample_days(day(0), day(6))

@@ -30,6 +30,8 @@ from wallet.models import CashAccount, Holding
 ZERO = Decimal("0")
 
 RANGES = {  # key -> (label, days back; None = computed)
+    "1d": ("1D", 1),
+    "7d": ("7D", 7),
     "1m": ("1M", 30),
     "3m": ("3M", 91),
     "6m": ("6M", 182),
@@ -38,6 +40,8 @@ RANGES = {  # key -> (label, days back; None = computed)
     "max": ("Max", None),
 }
 DEFAULT_RANGE = "6m"
+DASHBOARD_DEFAULT_RANGE = "1m"
+INTRADAY_RANGES = {"1d", "7d"}  # drawn from intraday bars, not daily closes
 MAX_YEARS = 10
 DAILY_POINTS_LIMIT = 400  # beyond this many days, sample weekly
 

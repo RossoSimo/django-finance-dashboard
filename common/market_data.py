@@ -13,6 +13,7 @@ import hashlib
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 from django.conf import settings
 from django.core.cache import cache
@@ -237,6 +238,51 @@ def get_price_history(symbol: str, start) -> list[tuple]:
         return []  # don't cache failures; retry on the next request
 
     cache.set(cache_key, series, settings.PRICE_HISTORY_CACHE_SECONDS)
+    return series
+
+
+INTRADAY_PARAMS = {
+    "1d": {"interval": "5m", "period": "5d"},  # 5 days so a weekend/holiday still has a last session
+    "7d": {"interval": "60m", "period": "7d"},
+}
+
+
+def get_intraday_history(symbol: str, range_key: str) -> list[tuple[datetime, float]]:
+    """Intraday closes as [(aware UTC datetime, float), ...], oldest first.
+    "1d" keeps only the last session (by local date in settings.TIME_ZONE);
+    "7d" keeps every bar. Cached per range; returns [] for an unknown range
+    or if the data can't be fetched."""
+    symbol = (symbol or "").upper()
+    params = INTRADAY_PARAMS.get(range_key)
+    if not symbol or params is None:
+        return []
+    cache_key = f"intraday:{symbol}:{range_key}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+    if yf is None:
+        return []
+
+    series: list[tuple[datetime, float]] = []
+    try:
+        frame = yf.Ticker(symbol).history(auto_adjust=False, **params)
+        for stamp, close in frame["Close"].items():
+            if close is not None and close == close:  # skip NaN
+                moment = stamp.to_pydatetime()
+                if moment.tzinfo is None:
+                    moment = moment.replace(tzinfo=timezone.utc)
+                series.append((moment.astimezone(timezone.utc), float(close)))
+    except Exception:
+        logger.exception("Failed to fetch intraday history for %s (%s)", symbol, range_key)
+        return []  # don't cache failures; retry on the next request
+
+    series.sort(key=lambda point: point[0])
+    if range_key == "1d" and series:
+        local = ZoneInfo(settings.TIME_ZONE)
+        last_day = series[-1][0].astimezone(local).date()
+        series = [p for p in series if p[0].astimezone(local).date() == last_day]
+
+    cache.set(cache_key, series, settings.INTRADAY_CACHE_SECONDS[range_key])
     return series
 
 

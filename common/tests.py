@@ -36,6 +36,53 @@ class NewsTests(TestCase):
         yf.Search.assert_not_called()
 
 
+class IntradayHistoryTests(TestCase):
+    def setUp(self):
+        cache.clear()
+
+    @staticmethod
+    def _frame(stamps, closes):
+        import pandas
+        return pandas.DataFrame({"Close": closes}, index=pandas.DatetimeIndex(stamps, tz="UTC"))
+
+    @mock.patch("common.market_data.yf")
+    def test_1d_keeps_last_session_only(self, yf):
+        yf.Ticker.return_value.history.return_value = self._frame(
+            ["2026-10-08 15:00", "2026-10-09 13:30", "2026-10-09 13:35", "2026-10-09 13:40"],
+            [1.0, 2.0, 3.0, float("nan")])
+        result = market_data.get_intraday_history("aapl", "1d")
+        self.assertEqual([c for _, c in result], [2.0, 3.0])
+        self.assertTrue(all(t.tzinfo is not None for t, _ in result))
+        self.assertEqual(result[0][0].isoformat(), "2026-10-09T13:30:00+00:00")
+        yf.Ticker.return_value.history.assert_called_once()
+        kwargs = yf.Ticker.return_value.history.call_args.kwargs
+        self.assertEqual((kwargs["interval"], kwargs["period"]), ("5m", "5d"))
+
+    @mock.patch("common.market_data.yf")
+    def test_7d_keeps_all_bars_and_is_cached(self, yf):
+        yf.Ticker.return_value.history.return_value = self._frame(
+            ["2026-10-08 15:00", "2026-10-09 13:30"], [1.0, 2.0])
+        self.assertEqual(len(market_data.get_intraday_history("AAPL", "7d")), 2)
+        market_data.get_intraday_history("AAPL", "7d")
+        self.assertEqual(yf.Ticker.return_value.history.call_count, 1)
+        kwargs = yf.Ticker.return_value.history.call_args.kwargs
+        self.assertEqual((kwargs["interval"], kwargs["period"]), ("60m", "7d"))
+
+    @mock.patch("common.market_data.yf")
+    def test_failure_returns_empty_and_is_not_cached(self, yf):
+        yf.Ticker.return_value.history.side_effect = RuntimeError("boom")
+        with self.assertLogs("common.market_data", level="ERROR"):
+            self.assertEqual(market_data.get_intraday_history("AAPL", "1d"), [])
+        with self.assertLogs("common.market_data", level="ERROR"):
+            market_data.get_intraday_history("AAPL", "1d")
+        self.assertEqual(yf.Ticker.return_value.history.call_count, 2)
+
+    @mock.patch("common.market_data.yf")
+    def test_unknown_range(self, yf):
+        self.assertEqual(market_data.get_intraday_history("AAPL", "1m"), [])
+        yf.Ticker.assert_not_called()
+
+
 class FormatTests(TestCase):
     def test_money(self):
         self.assertEqual(money(Decimal("1234.5"), "EUR"), "1.234,50\u00a0€")
