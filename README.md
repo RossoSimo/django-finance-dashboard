@@ -1,5 +1,7 @@
 # FinanceDash
 
+> I built this tool to solve a problem of my own and for 100% privacy—I didn't put too much effort into it, since working alongside AI agents is really the way to go now.
+
 A local-first personal finance dashboard built with Django:
 
 - **Wallet & liquidity** — track cash accounts and holdings (stocks, ETFs,
