@@ -126,10 +126,10 @@ Done (in git order):
 7. In-app price alerts (replaced watchlist targets).
 8. Performance charts (portfolio + per holding).
 9. Screenshot import rebuilt: transcribe-only schema + market cross-check;
-   fixed thinking-model failure (branch `feature/better-screenshot-import`, pending merge).
+   fixed thinking-model failure.
 10. UI redesign (sidebar/tab-bar shell, shared components, Italian number formatting, light/dark theme) and
     intraday charts: ranges 1D·7D·1M·3M·6M·YTD·1Y·Max via `get_intraday_history` / `history_for_range`;
-    dashboard net-worth chart now from `history_for_range` (branch `feature/ui-redesign`).
+    dashboard net-worth chart now from `history_for_range`.
 
 Known limitations:
 - Intraday FX (1D/7D charts) uses the current rate for the whole range.
